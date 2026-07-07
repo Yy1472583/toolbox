@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>实用工具箱 · 在线工具集合</title>
+  <meta name="description" content="一个实用的在线工具集合：JSON 格式化、Base64、URL 编解码、时间戳转换、密码生成、文本统计、颜色转换、正则测试等。" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <!-- 顶部横幅广告位 -->
+  <div class="ad-slot ad-top" data-ad="top-banner">
+    <span class="ad-label">广告位 · 728×90 顶部横幅</span>
+    <!-- 在此处粘贴广告代码（如 Google AdSense） -->
+  </div>
+
+  <header class="site-header">
+    <div class="brand">
+      <span class="brand-logo">🧰</span>
+      <span class="brand-name">实用工具箱</span>
+    </div>
+    <nav class="top-nav">
+      <a href="#tools">全部工具</a>
+      <a href="#about">关于</a>
+    </nav>
+  </header>
+
+  <div class="layout">
+    <!-- 左侧工具导航 -->
+    <aside class="sidebar">
+      <h2 class="sidebar-title">工具列表</h2>
+      <ul class="tool-menu" id="toolMenu">
+        <li data-tool="json" class="active">📋 JSON 格式化</li>
+        <li data-tool="base64">🔤 Base64 编解码</li>
+        <li data-tool="url">🔗 URL 编解码</li>
+        <li data-tool="timestamp">⏱ 时间戳转换</li>
+        <li data-tool="password">🔐 密码生成器</li>
+        <li data-tool="textcount">🔢 文本统计</li>
+        <li data-tool="color">🎨 颜色转换</li>
+        <li data-tool="regex">🔍 正则测试</li>
+        <li data-tool="textconv">✂️ 文本转换</li>
+      </ul>
+
+      <!-- 侧边栏广告位 -->
+      <div class="ad-slot ad-side" data-ad="sidebar">
+        <span class="ad-label">广告位 · 侧边栏</span>
+      </div>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="content" id="tools">
+      <!-- JSON 工具 -->
+      <section class="tool-panel active" id="panel-json">
+        <h3 class="tool-title">📋 JSON 格式化 / 校验</h3>
+        <p class="tool-desc">格式化、压缩并校验 JSON 数据。</p>
+        <textarea id="jsonInput" class="io-area" placeholder='在此粘贴 JSON，例如：{"name":"工具箱","tools":[1,2,3]}'></textarea>
+        <div class="btn-row">
+          <button class="btn" data-act="json-format">格式化</button>
+          <button class="btn" data-act="json-minify">压缩</button>
+          <button class="btn btn-ghost" data-act="json-clear">清空</button>
+        </div>
+        <pre id="jsonOutput" class="output-box"></pre>
+      </section>
+
+      <!-- Base64 工具 -->
+      <section class="tool-panel" id="panel-base64">
+        <h3 class="tool-title">🔤 Base64 编解码</h3>
+        <p class="tool-desc">文本与 Base64 互相转换（UTF-8 安全）。</p>
+        <textarea id="b64Input" class="io-area" placeholder="输入要编码或解码的文本"></textarea>
+        <div class="btn-row">
+          <button class="btn" data-act="b64-encode">编码 →</button>
+          <button class="btn" data-act="b64-decode">← 解码</button>
+          <button class="btn btn-ghost" data-act="b64-clear">清空</button>
+        </div>
+        <textarea id="b64Output" class="io-area" readonly></textarea>
+      </section>
+
+      <!-- URL 工具 -->
+      <section class="tool-panel" id="panel-url">
+        <h3 class="tool-title">🔗 URL 编解码</h3>
+        <p class="tool-desc">对 URL 或参数进行编码 / 解码。</p>
+        <textarea id="urlInput" class="io-area" placeholder="输入文本或 URL"></textarea>
+        <div class="btn-row">
+          <button class="btn" data-act="url-encode">编码 →</button>
+          <button class="btn" data-act="url-decode">← 解码</button>
+          <button class="btn btn-ghost" data-act="url-clear">清空</button>
+        </div>
+        <textarea id="urlOutput" class="io-area" readonly></textarea>
+      </section>
+
+      <!-- 时间戳 -->
+      <section class="tool-panel" id="panel-timestamp">
+        <h3 class="tool-title">⏱ 时间戳转换</h3>
+        <div class="row">
+          <label>当前时间戳（秒）：</label>
+          <code id="tsNow" class="inline-code"></code>
+          <button class="btn btn-sm" data-act="ts-refresh">刷新</button>
+        </div>
+        <div class="grid-2">
+          <div>
+            <label class="field-label">时间戳 → 日期</label>
+            <input type="text" id="tsInput" class="text-input" placeholder="1700000000 或 1700000000000" />
+            <button class="btn btn-sm" data-act="ts-to-date">转换</button>
+            <div id="tsDateOut" class="output-box small"></div>
+          </div>
+          <div>
+            <label class="field-label">日期 → 时间戳</label>
+            <input type="datetime-local" id="dateInput" class="text-input" />
+            <button class="btn btn-sm" data-act="date-to-ts">转换</button>
+            <div id="dateTsOut" class="output-box small"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 密码生成器 -->
+      <section class="tool-panel" id="panel-password">
+        <h3 class="tool-title">🔐 密码生成器</h3>
+        <div class="row">
+          <label>长度：<span id="pwLenVal">16</span></label>
+          <input type="range" id="pwLen" min="4" max="64" value="16" />
+        </div>
+        <div class="checks">
+          <label><input type="checkbox" id="pwUpper" checked /> 大写 A-Z</label>
+          <label><input type="checkbox" id="pwLower" checked /> 小写 a-z</label>
+          <label><input type="checkbox" id="pwNum" checked /> 数字 0-9</label>
+          <label><input type="checkbox" id="pwSym" checked /> 符号 !@#$</label>
+        </div>
+        <div class="btn-row">
+          <button class="btn" data-act="pw-gen">生成密码</button>
+          <button class="btn btn-ghost" data-act="pw-copy">复制</button>
+        </div>
+        <div id="pwOut" class="output-box mono selectable"></div>
+        <div class="strength" id="pwStrength"></div>
+      </section>
+
+      <!-- 文本统计 -->
+      <section class="tool-panel" id="panel-textcount">
+        <h3 class="tool-title">🔢 文本统计</h3>
+        <p class="tool-desc">实时统计字符、词语、行数等。</p>
+        <textarea id="tcInput" class="io-area" placeholder="输入文本开始统计..."></textarea>
+        <div class="stats-grid">
+          <div class="stat"><span class="stat-num" id="tcChars">0</span><span class="stat-label">字符（含空格）</span></div>
+          <div class="stat"><span class="stat-num" id="tcCharsNo">0</span><span class="stat-label">字符（不含空格）</span></div>
+          <div class="stat"><span class="stat-num" id="tcWords">0</span><span class="stat-label">词数</span></div>
+          <div class="stat"><span class="stat-num" id="tcLines">0</span><span class="stat-label">行数</span></div>
+          <div class="stat"><span class="stat-num" id="tcBytes">0</span><span class="stat-label">字节(UTF-8)</span></div>
+        </div>
+      </section>
+
+      <!-- 颜色转换 -->
+      <section class="tool-panel" id="panel-color">
+        <h3 class="tool-title">🎨 颜色转换</h3>
+        <div class="row">
+          <label>HEX：</label>
+          <input type="text" id="colorHex" class="text-input" value="#4f8cff" />
+          <input type="color" id="colorPicker" value="#4f8cff" />
+        </div>
+        <div class="color-preview" id="colorPreview"></div>
+        <div class="stats-grid">
+          <div class="stat"><span class="stat-num" id="colorRgb">rgb()</span><span class="stat-label">RGB</span></div>
+          <div class="stat"><span class="stat-num" id="colorHsl">hsl()</span><span class="stat-label">HSL</span></div>
+        </div>
+      </section>
+
+      <!-- 正则测试 -->
+      <section class="tool-panel" id="panel-regex">
+        <h3 class="tool-title">🔍 正则表达式测试</h3>
+        <div class="row">
+          <input type="text" id="rePattern" class="text-input" placeholder="正则，例如 \\d+" />
+          <select id="reFlags" class="text-input small-select">
+            <option value="g">g（全局）</option>
+            <option value="gi">gi（全局+忽略大小写）</option>
+            <option value="i">i（忽略大小写）</option>
+            <option value="">无</option>
+          </select>
+        </div>
+        <textarea id="reText" class="io-area" placeholder="输入待测试文本..."></textarea>
+        <button class="btn btn-sm" data-act="re-test">测试</button>
+        <div id="reOut" class="output-box"></div>
+        <div id="reCount" class="re-count"></div>
+      </section>
+
+      <!-- 文本转换 -->
+      <section class="tool-panel" id="panel-textconv">
+        <h3 class="tool-title">✂️ 文本转换</h3>
+        <textarea id="tc2Input" class="io-area" placeholder="输入文本..."></textarea>
+        <div class="btn-row wrap">
+          <button class="btn btn-sm" data-act="tc-upper">大写</button>
+          <button class="btn btn-sm" data-act="tc-lower">小写</button>
+          <button class="btn btn-sm" data-act="tc-title">首字母大写</button>
+          <button class="btn btn-sm" data-act="tc-reverse">反转</button>
+          <button class="btn btn-sm" data-act="tc-dedup">去重行</button>
+          <button class="btn btn-sm" data-act="tc-sort">行排序</button>
+          <button class="btn btn-sm" data-act="tc-trim">去除空行</button>
+        </div>
+        <textarea id="tc2Output" class="io-area" readonly></textarea>
+      </section>
+
+      <section class="about" id="about">
+        <h3>关于本站</h3>
+        <p>实用工具箱是一个纯前端、无需联网的在线工具集合，所有处理都在你的浏览器本地完成，数据不会上传到任何服务器。适合开发者、文案、运营等日常使用。</p>
+      </section>
+    </main>
+  </div>
+
+  <!-- 底部广告位 -->
+  <div class="ad-slot ad-bottom" data-ad="bottom-banner">
+    <span class="ad-label">广告位 · 728×90 底部横幅</span>
+  </div>
+
+  <footer class="site-footer">
+    <p>© <span id="year"></span> 实用工具箱 · 本地运行 · 无数据上传</p>
+  </footer>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
