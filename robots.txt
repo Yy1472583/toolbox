@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# 站点地图，便于搜索引擎发现全部页面
+Sitemap: https://www.hajimimanbo.cloud/sitemap.xml
