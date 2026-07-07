@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>车贷计算器 - 实用工具箱</title>
+  <meta name="description" content="在线车贷计算器：输入车辆总价、首付比例、贷款期限与年利率，自动计算等额本息 / 等额本金两种还款方式的月供、总利息与总还款额，帮您对比购车贷款成本。" />
+  <meta name="keywords" content="车贷计算器,汽车贷款,月供计算,等额本息,等额本金,购车贷款" />
+  <link rel="canonical" href="https://www.hajimimanbo.cloud/carloan.html" />
+  <link rel="stylesheet" href="style.css" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "车贷计算器",
+    "applicationCategory": "CalculatorApplication",
+    "operatingSystem": "Web",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
+    "url": "https://www.hajimimanbo.cloud/carloan.html"
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "车贷等额本息和等额本金怎么选？",
+        "acceptedAnswer": { "@type": "Answer", "text": "等额本息每月还款额固定，前期压力小，适合收入稳定的上班族；等额本金首月还款最多、之后递减，总利息更少，适合前期还款能力较强的人。两种方式总利息有差异，可按预算选择。" }
+      },
+      {
+        "@type": "Question",
+        "name": "车贷利率一般是多少？",
+        "acceptedAnswer": { "@type": "Answer", "text": "车贷利率因渠道不同差异较大：银行车贷年化通常在 3% 至 6% 左右，汽车金融公司可能更高或推出免息贴息活动，信用卡分期则折算为手续费率。具体以贷款机构当期报价为准。" }
+      },
+      {
+        "@type": "Question",
+        "name": "零首付购车划算吗？",
+        "acceptedAnswer": { "@type": "Answer", "text": "零首付看似门槛低，但通常伴随更高利率、手续费或强制保险，且车辆落地即贬值，总体成本往往高于正常首付方案。除非有厂家贴息免息活动，否则建议尽量提高首付以降低利息支出。" }
+      },
+      {
+        "@type": "Question",
+        "name": "车贷利息可以抵扣个税吗？",
+        "acceptedAnswer": { "@type": "Answer", "text": "目前个人所得税专项附加扣除中，住房贷款利息可抵扣，但车贷（汽车消费贷款）利息不在可抵扣范围内，因此不能用于个税专项附加扣除。" }
+      }
+    ]
+  }
+  </script>
+  <!-- Google AdSense（已接入：发布商 ca-pub-7981362795928481） -->
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-7981362795928481" crossorigin="anonymous"></script>
+</head>
+<body>
+
+  <header class="site-header">
+    <div class="brand">
+      <span class="brand-logo">🧰</span>
+      <span class="brand-name">实用工具箱</span>
+    </div>
+    <nav class="top-nav">
+      <a href="index.html">← 返回工具箱</a>
+    </nav>
+  </header>
+
+  <div class="calc-page">
+    <div class="calc-card">
+      <h1 class="calc-title">🚗 车贷计算器</h1>
+      <p class="calc-desc">输入车辆总价、首付比例、贷款期限与年利率，计算等额本息 / 等额本金的月供、总利息与总还款额。</p>
+
+      <div class="calc-field">
+        <label>车辆总价（元）</label>
+        <input type="number" id="price" value="150000" min="0" step="1000" />
+      </div>
+      <div class="calc-grid">
+        <div class="calc-field">
+          <label>首付比例（%）</label>
+          <input type="number" id="down" value="30" min="0" max="100" step="5" />
+        </div>
+        <div class="calc-field">
+          <label>贷款期限（月）</label>
+          <input type="number" id="months" value="36" min="1" step="1" />
+        </div>
+      </div>
+      <div class="calc-grid">
+        <div class="calc-field">
+          <label>年利率（%）</label>
+          <input type="number" id="rate" value="4.5" min="0" step="0.1" />
+        </div>
+        <div class="calc-field">
+          <label>还款方式</label>
+          <select id="method">
+            <option value="emi">等额本息</option>
+            <option value="ep">等额本金</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" id="calcBtn">计算</button>
+        <button class="btn btn-ghost" id="resetBtn">重置</button>
+      </div>
+
+      <div class="calc-result" id="result">请输入参数后点击「计算」。</div>
+
+      <p class="calc-note">
+        说明：贷款本金 = 车辆总价 − 首付金额。本计算器按常规车贷公式估算，结果仅供参考，实际以贷款机构核算为准。
+      </p>
+    </div>
+
+    <section class="faq">
+      <h2>常见问题</h2>
+      <div class="faq-item">
+        <h3>车贷等额本息和等额本金怎么选？</h3>
+        <p>等额本息每月还款额固定，前期压力小，适合收入稳定的上班族；等额本金首月还款最多、之后递减，总利息更少，适合前期还款能力较强的人。两种方式总利息有差异，可按预算选择。</p>
+      </div>
+      <div class="faq-item">
+        <h3>车贷利率一般是多少？</h3>
+        <p>车贷利率因渠道不同差异较大：银行车贷年化通常在 3% 至 6% 左右，汽车金融公司可能更高或推出免息贴息活动，信用卡分期则折算为手续费率。具体以贷款机构当期报价为准。</p>
+      </div>
+      <div class="faq-item">
+        <h3>零首付购车划算吗？</h3>
+        <p>零首付看似门槛低，但通常伴随更高利率、手续费或强制保险，且车辆落地即贬值，总体成本往往高于正常首付方案。除非有厂家贴息免息活动，否则建议尽量提高首付以降低利息支出。</p>
+      </div>
+      <div class="faq-item">
+        <h3>车贷利息可以抵扣个税吗？</h3>
+        <p>目前个人所得税专项附加扣除中，住房贷款利息可抵扣，但车贷（汽车消费贷款）利息不在可抵扣范围内，因此不能用于个税专项附加扣除。</p>
+      </div>
+    </section>
+
+    <div class="related">
+      <h3>相关计算器</h3>
+      <a href="mortgage.html">房贷计算器</a>
+      <a href="loan.html">贷款计算器</a>
+      <a href="salary.html">税后工资计算器</a>
+      <a href="compound.html">复利计算器</a>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <p>© <span id="year"></span> 实用工具箱 · <a href="index.html">返回首页</a> · <a href="privacy.html">隐私政策</a> · <a href="ads.html">广告合作</a></p>
+  </footer>
+
+  <script>
+  function fmt(n) { return '¥' + (Math.round(n * 100) / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function calc() {
+    var price = parseFloat(document.getElementById('price').value);
+    var downRatio = parseFloat(document.getElementById('down').value) / 100;
+    var n = parseInt(document.getElementById('months').value, 10);
+    var annual = parseFloat(document.getElementById('rate').value) / 100;
+    var r = annual / 12;
+    var res = document.getElementById('result');
+    if (!(price > 0) || !(n > 0) || downRatio < 0 || downRatio > 1) { res.textContent = '请输入有效的车辆总价、首付与期限。'; return; }
+    var downPay = price * downRatio;
+    var P = price - downPay;
+    if (document.getElementById('method').value === 'emi') {
+      var f = Math.pow(1 + r, n);
+      var M = r === 0 ? P / n : P * r * f / (f - 1);
+      var total = M * n;
+      var interest = total - P;
+      res.innerHTML =
+        '<span class="big">' + fmt(M) + ' / 月</span>' +
+        '<div class="line"><span class="k">首付金额</span><span class="v">' + fmt(downPay) + '</span></div>' +
+        '<div class="line"><span class="k">贷款本金</span><span class="v">' + fmt(P) + '</span></div>' +
+        '<div class="line"><span class="k">还款总额</span><span class="v">' + fmt(total) + '</span></div>' +
+        '<div class="line"><span class="k">利息总额</span><span class="v hl">' + fmt(interest) + '</span></div>';
+    } else {
+      var perMonth = P / n;
+      var first = perMonth + P * r;
+      var decrease = perMonth * r;
+      var last = perMonth + perMonth * r;
+      var interest2 = P * r * (n + 1) / 2;
+      var total2 = P + interest2;
+      res.innerHTML =
+        '<span class="big">' + fmt(first) + ' / 首月</span>' +
+        '<div class="line"><span class="k">首付金额</span><span class="v">' + fmt(downPay) + '</span></div>' +
+        '<div class="line"><span class="k">每月递减</span><span class="v">' + fmt(decrease) + '</span></div>' +
+        '<div class="line"><span class="k">末月还款</span><span class="v">' + fmt(last) + '</span></div>' +
+        '<div class="line"><span class="k">还款总额</span><span class="v">' + fmt(total2) + '</span></div>' +
+        '<div class="line"><span class="k">利息总额</span><span class="v hl">' + fmt(interest2) + '</span></div>';
+    }
+  }
+  document.getElementById('calcBtn').addEventListener('click', calc);
+  document.getElementById('resetBtn').addEventListener('click', function () {
+    document.getElementById('price').value = 150000;
+    document.getElementById('down').value = 30;
+    document.getElementById('months').value = 36;
+    document.getElementById('rate').value = 4.5;
+    document.getElementById('method').value = 'emi';
+    document.getElementById('result').textContent = '请输入参数后点击「计算」。';
+  });
+  document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

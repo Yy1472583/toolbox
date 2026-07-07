@@ -303,3 +303,11 @@ mark.re-match { background: #ffe066; padding: 0 2px; border-radius: 3px; }
 @media (max-width: 560px) {
   .calc-grid { grid-template-columns: 1fr; }
 }
+
+/* FAQ 段落（提升 SEO 与停留时长） */
+.faq { margin-top: 26px; }
+.faq h2 { font-size: 18px; margin: 0 0 12px; }
+.faq-item { border-top: 1px solid var(--border); padding: 14px 0; }
+.faq-item:first-of-type { border-top: none; }
+.faq-item h3 { font-size: 15px; margin: 0 0 6px; color: var(--text); }
+.faq-item p { margin: 0; font-size: 14px; color: var(--text-soft); line-height: 1.7; }
