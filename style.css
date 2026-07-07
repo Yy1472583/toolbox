@@ -204,6 +204,29 @@ mark.re-match { background: #ffe066; padding: 0 2px; border-radius: 3px; }
 .md-preview a { color: var(--primary-dark); }
 /* 关于 */
 .about { margin-top: 30px; padding-top: 20px; border-top: 1px solid var(--border); color: var(--text-soft); font-size: 14px; }
+/* 首页热门计算器入口（首屏可见） */
+.calc-promo { max-width: 1100px; margin: 20px auto 0; padding: 0 16px; }
+.calc-promo-inner { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 20px 24px; }
+.calc-promo-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.calc-promo-head h2 { margin: 0; font-size: 20px; }
+.calc-promo-sub { color: var(--text-soft); font-size: 13px; }
+.calc-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
+.calc-card-link {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  text-decoration: none;
+  color: var(--text);
+  background: #fbfcfe;
+  transition: border-color .15s, transform .15s, box-shadow .15s;
+}
+.calc-card-link:hover { border-color: var(--primary); transform: translateY(-2px); box-shadow: var(--shadow); }
+.cc-icon { font-size: 26px; }
+.cc-name { font-weight: 700; font-size: 15px; }
+.cc-desc { font-size: 12px; color: var(--text-soft); }
 /* 页脚 */
 .site-footer { text-align: center; color: var(--text-soft); font-size: 13px; padding: 24px; }
 .site-footer a { color: var(--primary); text-decoration: none; }
