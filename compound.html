@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>复利计算器 - 实用工具箱</title>
+  <meta name="description" content="在线复利计算器：输入本金、年化收益率、期限与每月追加金额，按月复利计算到期总金额、累计投入与利息收益，助您规划存款与理财。" />
+  <meta name="keywords" content="复利计算器,利息计算,存款收益,理财计算,年化收益,定投" />
+  <link rel="canonical" href="https://www.hajimimanbo.cloud/compound.html" />
+  <link rel="stylesheet" href="style.css" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "复利计算器",
+    "applicationCategory": "CalculatorApplication",
+    "operatingSystem": "Web",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
+    "url": "https://www.hajimimanbo.cloud/compound.html"
+  }
+  </script>
+</head>
+<body>
+  <!-- 顶部横幅广告位 -->
+  <div class="ad-slot ad-top" data-ad="top-banner">
+    <span class="ad-label">广告位 · 728×90 顶部横幅</span>
+    <!-- 在此处粘贴广告代码（如 Google AdSense） -->
+  </div>
+
+  <header class="site-header">
+    <div class="brand">
+      <span class="brand-logo">🧰</span>
+      <span class="brand-name">实用工具箱</span>
+    </div>
+    <nav class="top-nav">
+      <a href="index.html">← 返回工具箱</a>
+    </nav>
+  </header>
+
+  <div class="calc-page">
+    <div class="calc-card">
+      <h1 class="calc-title">📈 复利计算器</h1>
+      <p class="calc-desc">输入本金、年化收益率、期限与每月追加，按（默认每月）复利计算到期总额与利息收益。</p>
+
+      <div class="calc-grid">
+        <div class="calc-field">
+          <label>本金（元）</label>
+          <input type="number" id="principal" value="100000" min="0" step="1000" />
+        </div>
+        <div class="calc-field">
+          <label>年化收益率（%）</label>
+          <input type="number" id="apr" value="5" min="0" step="0.1" />
+        </div>
+      </div>
+      <div class="calc-grid">
+        <div class="calc-field">
+          <label>期限（年）</label>
+          <input type="number" id="years" value="10" min="1" step="1" />
+        </div>
+        <div class="calc-field">
+          <label>每月追加（元，可填 0）</label>
+          <input type="number" id="pmt" value="1000" min="0" step="100" />
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" id="calcBtn">计算</button>
+        <button class="btn btn-ghost" id="resetBtn">重置</button>
+      </div>
+
+      <div class="calc-result" id="result">请输入参数后点击「计算」。</div>
+
+      <p class="calc-note">
+        计算口径：按月复利，每月追加于期初计入。复利威力来自「利滚利」，期限越长、收益率越高，最终利息占比越显著。结果为估算，不构成投资建议。
+      </p>
+    </div>
+
+    <div class="related">
+      <h3>相关计算器</h3>
+      <a href="mortgage.html">房贷计算器</a>
+      <a href="bmi.html">BMI 计算器</a>
+      <a href="tax.html">个税计算器</a>
+      <a href="loan.html">贷款计算器</a>
+    </div>
+  </div>
+
+  <!-- 底部广告位 -->
+  <div class="ad-slot ad-bottom" data-ad="bottom-banner">
+    <span class="ad-label">广告位 · 728×90 底部横幅</span>
+  </div>
+
+  <footer class="site-footer">
+    <p>© <span id="year"></span> 实用工具箱 · <a href="index.html">返回首页</a></p>
+  </footer>
+
+  <script>
+  function fmt(n) { return '¥' + (Math.round(n * 100) / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function calc() {
+    var P = parseFloat(principal.value) || 0;
+    var apr = parseFloat(apr_.value) || 0;
+    var y = parseInt(years.value, 10) || 0;
+    var pmt = parseFloat(pmt_.value) || 0;
+    var res = document.getElementById('result');
+    if (!(P >= 0) || !(y > 0)) { res.textContent = '请输入有效的本金与期限。'; return; }
+    var rm = apr / 100 / 12;
+    var months = y * 12;
+    var fvP = P * Math.pow(1 + rm, months);
+    var fvC = rm === 0 ? pmt * months : pmt * (Math.pow(1 + rm, months) - 1) / rm;
+    var total = fvP + fvC;
+    var invested = P + pmt * months;
+    var interest = total - invested;
+    res.innerHTML =
+      '<span class="big">' + fmt(total) + '</span>' +
+      '<div class="line"><span class="k">累计本金 + 投入</span><span class="v">' + fmt(invested) + '</span></div>' +
+      '<div class="line"><span class="k">利息收益</span><span class="v hl">' + fmt(interest) + '</span></div>' +
+      '<div class="line"><span class="k">计息月数</span><span class="v">' + months + ' 期</span></div>';
+  }
+  var apr_ = document.getElementById('apr');
+  var pmt_ = document.getElementById('pmt');
+  document.getElementById('calcBtn').addEventListener('click', calc);
+  document.getElementById('resetBtn').addEventListener('click', function () {
+    principal.value = 100000; apr_.value = 5; years.value = 10; pmt_.value = 1000;
+    document.getElementById('result').textContent = '请输入参数后点击「计算」。';
+  });
+  document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

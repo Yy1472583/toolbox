@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>个人所得税计算器 - 实用工具箱</title>
+  <meta name="description" content="在线个人所得税计算器：输入月税前收入、五险一金与专项附加扣除，按综合所得年度税率表计算全年应缴个税、月均个税与税后月收入。" />
+  <meta name="keywords" content="个税计算器,个人所得税,综合所得,税后工资,五险一金,专项附加扣除" />
+  <link rel="canonical" href="https://www.hajimimanbo.cloud/tax.html" />
+  <link rel="stylesheet" href="style.css" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "个人所得税计算器",
+    "applicationCategory": "CalculatorApplication",
+    "operatingSystem": "Web",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
+    "url": "https://www.hajimimanbo.cloud/tax.html"
+  }
+  </script>
+</head>
+<body>
+  <!-- 顶部横幅广告位 -->
+  <div class="ad-slot ad-top" data-ad="top-banner">
+    <span class="ad-label">广告位 · 728×90 顶部横幅</span>
+    <!-- 在此处粘贴广告代码（如 Google AdSense） -->
+  </div>
+
+  <header class="site-header">
+    <div class="brand">
+      <span class="brand-logo">🧰</span>
+      <span class="brand-name">实用工具箱</span>
+    </div>
+    <nav class="top-nav">
+      <a href="index.html">← 返回工具箱</a>
+    </nav>
+  </header>
+
+  <div class="calc-page">
+    <div class="calc-card">
+      <h1 class="calc-title">🧾 个人所得税计算器</h1>
+      <p class="calc-desc">按综合所得年度税率表，估算全年应缴个税、月均个税与税后月收入。</p>
+
+      <div class="calc-field">
+        <label>月税前收入（元）</label>
+        <input type="number" id="salary" value="20000" min="0" step="100" />
+      </div>
+      <div class="calc-grid">
+        <div class="calc-field">
+          <label>五险一金（月，元）</label>
+          <input type="number" id="ins" value="3000" min="0" step="100" />
+        </div>
+        <div class="calc-field">
+          <label>专项附加扣除（月，元）</label>
+          <input type="number" id="special" value="2000" min="0" step="100" />
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" id="calcBtn">计算</button>
+        <button class="btn btn-ghost" id="resetBtn">重置</button>
+      </div>
+
+      <div class="calc-result" id="result">请输入收入信息后点击「计算」。</div>
+
+      <p class="calc-note">
+        计算口径：年度应纳税所得额 =（月税前收入 − 五险一金 − 专项附加扣除 − 5000）× 12，再套用综合所得 7 级超额累进税率（3%–45%）。本工具为估算，实际以税务机关核算为准。
+      </p>
+    </div>
+
+    <div class="related">
+      <h3>相关计算器</h3>
+      <a href="mortgage.html">房贷计算器</a>
+      <a href="bmi.html">BMI 计算器</a>
+      <a href="compound.html">复利计算器</a>
+      <a href="loan.html">贷款计算器</a>
+    </div>
+  </div>
+
+  <!-- 底部广告位 -->
+  <div class="ad-slot ad-bottom" data-ad="bottom-banner">
+    <span class="ad-label">广告位 · 728×90 底部横幅</span>
+  </div>
+
+  <footer class="site-footer">
+    <p>© <span id="year"></span> 实用工具箱 · <a href="index.html">返回首页</a></p>
+  </footer>
+
+  <script>
+  function fmt(n) { return '¥' + (Math.round(n * 100) / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+  function annualTax(t) {
+    if (t <= 0) return 0;
+    var b = [
+      [36000, 0.03, 0], [144000, 0.10, 2520], [300000, 0.20, 16920],
+      [420000, 0.25, 31920], [660000, 0.30, 52920], [960000, 0.35, 85920],
+      [Infinity, 0.45, 181920]
+    ];
+    for (var i = 0; i < b.length; i++) { if (t <= b[i][0]) return t * b[i][1] - b[i][2]; }
+    return 0;
+  }
+  function calc() {
+    var s = parseFloat(salary.value) || 0;
+    var ins = parseFloat(ins_.value) || 0;
+    var sp = parseFloat(special.value) || 0;
+    var res = document.getElementById('result');
+    var monthlyTaxable = s - ins - sp - 5000;
+    var annual = monthlyTaxable * 12;
+    var tax = annualTax(annual);
+    var monthlyTax = tax / 12;
+    var afterTax = s - ins - sp - monthlyTax;
+    res.innerHTML =
+      '<div class="line"><span class="k">年应纳税所得额</span><span class="v">' + fmt(Math.max(0, annual)) + '</span></div>' +
+      '<span class="big">' + fmt(tax) + ' <span style="font-size:14px;font-weight:400;color:var(--text-soft)">/ 年个税</span></span>' +
+      '<div class="line"><span class="k">月均个税</span><span class="v">' + fmt(monthlyTax) + '</span></div>' +
+      '<div class="line"><span class="k">税后月收入</span><span class="v hl">' + fmt(afterTax) + '</span></div>';
+  }
+  // 注意：id "ins" 与全局变量冲突，使用 getElementById
+  var ins_ = document.getElementById('ins');
+  document.getElementById('calcBtn').addEventListener('click', calc);
+  document.getElementById('resetBtn').addEventListener('click', function () {
+    salary.value = 20000; ins_.value = 3000; special.value = 2000;
+    document.getElementById('result').textContent = '请输入收入信息后点击「计算」。';
+  });
+  document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>

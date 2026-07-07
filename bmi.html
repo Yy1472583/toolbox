@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BMI 计算器 - 实用工具箱</title>
+  <meta name="description" content="在线 BMI 计算器：输入身高体重，立即得出 BMI 指数、体型分类（偏瘦/正常/超重/肥胖）及健康体重范围，依据中国成人标准。" />
+  <meta name="keywords" content="BMI计算器,体重指数,健康体重,偏瘦,超重,肥胖,身高体重" />
+  <link rel="canonical" href="https://www.hajimimanbo.cloud/bmi.html" />
+  <link rel="stylesheet" href="style.css" />
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "BMI 计算器",
+    "applicationCategory": "CalculatorApplication",
+    "operatingSystem": "Web",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "CNY" },
+    "url": "https://www.hajimimanbo.cloud/bmi.html"
+  }
+  </script>
+</head>
+<body>
+  <!-- 顶部横幅广告位 -->
+  <div class="ad-slot ad-top" data-ad="top-banner">
+    <span class="ad-label">广告位 · 728×90 顶部横幅</span>
+    <!-- 在此处粘贴广告代码（如 Google AdSense） -->
+  </div>
+
+  <header class="site-header">
+    <div class="brand">
+      <span class="brand-logo">🧰</span>
+      <span class="brand-name">实用工具箱</span>
+    </div>
+    <nav class="top-nav">
+      <a href="index.html">← 返回工具箱</a>
+    </nav>
+  </header>
+
+  <div class="calc-page">
+    <div class="calc-card">
+      <h1 class="calc-title">⚖️ BMI 计算器</h1>
+      <p class="calc-desc">输入身高与体重，计算您的 BMI 指数、体型分类及健康体重范围（依据中国成人标准）。</p>
+
+      <div class="calc-grid">
+        <div class="calc-field">
+          <label>身高（cm）</label>
+          <input type="number" id="height" value="170" min="50" max="250" step="0.1" />
+        </div>
+        <div class="calc-field">
+          <label>体重（kg）</label>
+          <input type="number" id="weight" value="65" min="10" max="300" step="0.1" />
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" id="calcBtn">计算</button>
+        <button class="btn btn-ghost" id="resetBtn">重置</button>
+      </div>
+
+      <div class="calc-result" id="result">请输入身高体重后点击「计算」。</div>
+
+      <p class="calc-note">
+        中国成人 BMI 标准：&lt;18.5 偏瘦；18.5–23.9 正常；24–27.9 超重；≥28 肥胖。本结果仅供参考，肌肉量、年龄、性别等会影响实际健康评估。
+      </p>
+    </div>
+
+    <div class="related">
+      <h3>相关计算器</h3>
+      <a href="mortgage.html">房贷计算器</a>
+      <a href="tax.html">个税计算器</a>
+      <a href="compound.html">复利计算器</a>
+      <a href="loan.html">贷款计算器</a>
+    </div>
+  </div>
+
+  <!-- 底部广告位 -->
+  <div class="ad-slot ad-bottom" data-ad="bottom-banner">
+    <span class="ad-label">广告位 · 728×90 底部横幅</span>
+  </div>
+
+  <footer class="site-footer">
+    <p>© <span id="year"></span> 实用工具箱 · <a href="index.html">返回首页</a></p>
+  </footer>
+
+  <script>
+  function calc() {
+    var h = parseFloat(height.value) / 100;
+    var w = parseFloat(weight.value);
+    var res = document.getElementById('result');
+    if (!(h > 0) || !(w > 0)) { res.textContent = '请输入有效的身高与体重。'; return; }
+    var bmi = w / (h * h);
+    var cat, cls;
+    if (bmi < 18.5) { cat = '偏瘦'; }
+    else if (bmi < 24) { cat = '正常'; }
+    else if (bmi < 28) { cat = '超重'; }
+    else { cat = '肥胖'; }
+    var lo = 18.5 * h * h, hi = 23.9 * h * h;
+    res.innerHTML =
+      '<span class="big">' + bmi.toFixed(1) + '</span>' +
+      '<div class="line"><span class="k">体型分类</span><span class="v hl">' + cat + '</span></div>' +
+      '<div class="line"><span class="k">健康体重范围</span><span class="v">' + lo.toFixed(1) + ' – ' + hi.toFixed(1) + ' kg</span></div>';
+  }
+  document.getElementById('calcBtn').addEventListener('click', calc);
+  document.getElementById('resetBtn').addEventListener('click', function () {
+    height.value = 170; weight.value = 65;
+    document.getElementById('result').textContent = '请输入身高体重后点击「计算」。';
+  });
+  document.getElementById('year').textContent = new Date().getFullYear();
+  </script>
+</body>
+</html>
