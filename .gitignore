@@ -1,0 +1,6 @@
+# 项目内部数据，不纳入站点仓库
+.workbuddy/
+
+# 系统文件
+.DS_Store
+Thumbs.db
