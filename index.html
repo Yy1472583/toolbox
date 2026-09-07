@@ -170,6 +170,23 @@ header{display:flex;align-items:center;justify-content:space-between;padding:18p
 .plan-focus li::before{content:'';position:absolute;left:4px;top:8px;width:6px;height:6px;border-radius:50%;background:var(--orange)}
 .auto{font-style:normal;font-size:10.5px;font-weight:700;color:var(--green);background:var(--green-soft);border-radius:5px;padding:1px 6px;margin-left:6px;vertical-align:middle}
 
+/* ============== 写译 / 阅读 / 技巧 模块 ============== */
+.tabbar{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.tabbar button{flex:none;min-width:62px}
+.wl-prompt{display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--line-soft)}
+.wl-prompt:first-child{border-top:none}
+.wl-prompt .grow{display:flex;flex-direction:column;gap:3px;min-width:0}
+.wl-item{padding:12px 0;border-top:1px solid var(--line-soft)}
+.wl-item:first-child{border-top:none}
+.wl-item .q{font-size:13.5px;color:var(--ink);margin:4px 0;line-height:1.5}
+.wl-item .a{font-size:13px;color:var(--ink-2);line-height:1.55;white-space:pre-wrap}
+.skill-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.skill-card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
+.skill-card.ok{border-color:var(--green);background:var(--green-soft)}
+.skill-card h3{font-size:14px;font-weight:700;color:var(--ink);margin:0}
+.skill-sub{font-size:11px;font-weight:700;color:var(--muted);margin:10px 0 4px;letter-spacing:.04em}
+@media(max-width:680px){.skill-grid{grid-template-columns:1fr}}
+
 /* ============== 环形进度 ============== */
 .ring-wrap{display:flex;align-items:center;gap:16px}
 .ring{position:relative;width:96px;height:96px;flex:none}
@@ -742,7 +759,7 @@ var ERR_INTERVALS=[1,3,7,15,30];
 var TYPES=['听力','阅读','写作','翻译'];
 var REASONS=['词汇不认识','语法不熟','理解偏差','粗心失误','时间不够','其他','题库答错'];
 var TAGCLS={'听力':'listening','阅读':'reading','写作':'writing','翻译':'translating'};
-var TABS=[{id:'today',name:'今日',ic:'today'},{id:'quiz',name:'刷题',ic:'chart'},{id:'book',name:'错本',ic:'book'},{id:'bank',name:'真题',ic:'bank'},{id:'plan',name:'计划',ic:'target'},{id:'me',name:'我的',ic:'user'}];
+var TABS=[{id:'today',name:'今日',ic:'today'},{id:'quiz',name:'刷题',ic:'chart'},{id:'book',name:'错本',ic:'book'},{id:'bank',name:'真题',ic:'bank'},{id:'plan',name:'计划',ic:'target'},{id:'write',name:'写译',ic:'edit'},{id:'listen',name:'听力',ic:'vol'},{id:'read',name:'阅读',ic:'replay'},{id:'skill',name:'技巧',ic:'star'},{id:'me',name:'我的',ic:'user'}];
 var ICONS={
   today:'<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',
   chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
@@ -790,51 +807,37 @@ function toast(msg){
   el.textContent=msg;el.classList.add('show');
   clearTimeout(TOAST_T);TOAST_T=setTimeout(function(){el.classList.remove('show');},2200);
 }
-function speak(text){
+function speak(text,lang){
   try{
     if(!('speechSynthesis' in window)||!window.SpeechSynthesisUtterance)return;
-    window.speechSynthesis.cancel();
-    var u=new SpeechSynthesisUtterance(text);u.lang='en-US';u.rate=.9;
-    window.speechSynthesis.speak(u);
+    var s=window.speechSynthesis;
+    s.cancel();
+    var u=new SpeechSynthesisUtterance(text);u.lang=lang||'en-US';u.rate=.9;
+    setTimeout(function(){try{if(s.resume)s.resume();s.speak(u);}catch(e){}},90);
   }catch(e){}
 }
 function canSpeak(){return ('speechSynthesis' in window)&&!!window.SpeechSynthesisUtterance;}
-/* 听力播放器（基于浏览器 TTS） */
-var AP={id:null,text:'',est:0,pos:0,playing:false,paused:false,vol:0.9,rate:0.9,raf:0,t0:0,u:null};
-function apEstimate(t,r){var w=(String(t).match(/\S+/g)||[]).length;return Math.max(2,w/(2.6*r));}
-function apRender(){
-  var fill=$('#apFill'),t=$('#apTime'),btn=$('#apToggle');
-  if(!fill)return;
-  var p=AP.est>0?clamp(AP.pos/AP.est,0,1):0;
-  fill.style.width=(p*100).toFixed(1)+'%';
-  var c=Math.floor(AP.pos),o=Math.floor(AP.est);
-  if(t)t.textContent=Math.floor(c/60)+':'+pad2(c%60)+' / '+Math.floor(o/60)+':'+pad2(o%60);
-  if(btn)btn.innerHTML=AP.playing?icon('pause',20):icon('play',20);
+/* 听力播放（基于浏览器 TTS，点击即放，无语速/音量控件） */
+var PS={playing:false,key:null};
+function stopSpeak(){try{window.speechSynthesis.cancel();}catch(e){}PS.playing=false;PS.key=null;renderPlayBtn();}
+function playScript(text,key){
+  try{
+    if(!('speechSynthesis' in window)||!window.SpeechSynthesisUtterance||!text)return;
+    var s=window.speechSynthesis;
+    if(PS.playing&&PS.key===key){s.cancel();PS.playing=false;PS.key=null;renderPlayBtn();return;}
+    s.cancel();
+    var u=new SpeechSynthesisUtterance(text);u.lang='en-US';u.rate=0.95;u.volume=1;
+    u.onend=function(){PS.playing=false;PS.key=null;renderPlayBtn();};
+    u.onerror=function(){PS.playing=false;PS.key=null;renderPlayBtn();};
+    PS.playing=true;PS.key=key;renderPlayBtn();
+    setTimeout(function(){try{if(s.resume)s.resume();s.speak(u);}catch(e){}},90);
+  }catch(e){}
 }
-function apTick(){ if(!AP.playing){AP.raf=0;return;} if(!AP.paused)AP.pos=(Date.now()-AP.t0)/1000; apRender(); AP.raf=requestAnimationFrame(apTick); }
-function apStart(){
-  if(!canSpeak()||!AP.text)return;
-  try{window.speechSynthesis.cancel();}catch(e){}
-  var u=new SpeechSynthesisUtterance(AP.text);
-  u.lang='en-US';u.rate=AP.rate;u.volume=AP.vol;
-  u.onboundary=function(e){ if(e&&e.charIndex!=null&&AP.text.length)AP.pos=AP.est*(e.charIndex/AP.text.length); };
-  u.onend=function(){AP.playing=false;AP.paused=false;AP.pos=AP.est;apRender();};
-  u.onerror=function(){AP.playing=false;AP.paused=false;};
-  AP.u=u;AP.playing=true;AP.paused=false;AP.pos=0;AP.t0=Date.now();
-  window.speechSynthesis.speak(u);
-  if(AP.raf)cancelAnimationFrame(AP.raf);AP.raf=requestAnimationFrame(apTick);
+function playBankScript(id){var it=BANK_MAP[id];if(it&&it.script)playScript(it.script,id);}
+function renderPlayBtn(){
+  var b=document.getElementById('apBtn');
+  if(b)b.innerHTML=(PS.playing?icon('pause',16):icon('play',16))+' '+(PS.playing?'暂停':'播放听力');
 }
-function apToggle(){
-  if(AP.playing){
-    if(AP.paused){ try{window.speechSynthesis.resume();}catch(e){} AP.paused=false;AP.t0=Date.now()-AP.pos*1000;AP.raf=requestAnimationFrame(apTick); }
-    else { try{window.speechSynthesis.pause();}catch(e){} AP.paused=true; if(AP.raf){cancelAnimationFrame(AP.raf);AP.raf=0;} }
-  } else { apStart(); }
-  apRender();
-}
-function apReplay(){ apStart(); }
-function apStop(){ try{window.speechSynthesis.cancel();}catch(e){} AP.playing=false;AP.paused=false;AP.pos=0;if(AP.raf){cancelAnimationFrame(AP.raf);AP.raf=0;} apRender(); }
-function apSetVol(v){ AP.vol=clamp(+v/100,0,1); if(AP.u)AP.u.volume=AP.vol; }
-function apSetRate(v){ var nr=clamp(+v/100,0.5,2),old=AP.est; AP.rate=nr; AP.est=apEstimate(AP.text,AP.rate); if(old>0)AP.pos=AP.pos*(old/AP.est); apRender(); }
 
 /* ---------------- 示例数据 ---------------- */
 function defaultExamDate(){
@@ -856,6 +859,10 @@ function sampleState(){
     checkins:[],
     dayStats:{},
     planChecks:{},
+    writing:[],
+    reading:[],
+    dictation:[],
+    skillDone:{},
     sync:{},
     meta:{sample:{practice:[],errors:[],vocab:[],words:[]},backupDismiss:0}
   };
@@ -893,7 +900,7 @@ function sampleState(){
 /* ---------------- 状态读写 ---------------- */
 function normalizeState(s){
   var d=sampleState();
-  var base={version:1,settings:{},wordProgress:{},dailyQueue:null,vocab:[],practice:[],errors:[],checkins:[],dayStats:{},planChecks:{},sync:{},meta:{sample:{practice:[],errors:[],vocab:[],words:[]},backupDismiss:0}};
+  var base={version:1,settings:{},wordProgress:{},dailyQueue:null,vocab:[],practice:[],errors:[],checkins:[],dayStats:{},planChecks:{},writing:[],reading:[],dictation:[],skillDone:{},sync:{},meta:{sample:{practice:[],errors:[],vocab:[],words:[]},backupDismiss:0}};
   if(!s||typeof s!=='object')return d;
   var out=base;
   out.settings.dailyNew=clamp(parseInt((s.settings||{}).dailyNew,10)||10,1,50);
@@ -924,6 +931,10 @@ function normalizeState(s){
   if(Array.isArray(s.checkins))out.checkins=s.checkins.map(function(x){return String(x).slice(0,10);});
   if(s.dayStats&&typeof s.dayStats==='object')Object.keys(s.dayStats).forEach(function(k){out.dayStats[String(k).slice(0,10)]=parseInt(s.dayStats[k],10)||0;});
   if(s.planChecks&&typeof s.planChecks==='object'){out.planChecks={};Object.keys(s.planChecks).forEach(function(k){out.planChecks[String(k).slice(0,10)]=s.planChecks[k]||{};});}
+  if(Array.isArray(s.writing))out.writing=s.writing.filter(function(x){return x&&x.id;}).map(function(x){return {id:x.id||uid(),date:String(x.date||todayStr()).slice(0,10),type:x.type==='翻译'?'翻译':'写作',topic:x.topic||'',text:x.text||'',graded:!!x.graded};});
+  if(Array.isArray(s.reading))out.reading=s.reading.filter(function(x){return x&&x.id;}).map(function(x){return {id:x.id||uid(),date:String(x.date||todayStr()).slice(0,10),sentence:x.sentence||'',analysis:x.analysis||''};});
+  if(Array.isArray(s.dictation))out.dictation=s.dictation.filter(function(x){return x&&x.id;}).map(function(x){return {id:x.id||uid(),date:String(x.date||todayStr()).slice(0,10),text:x.text||''};});
+  if(s.skillDone&&typeof s.skillDone==='object'){out.skillDone={};Object.keys(s.skillDone).forEach(function(k){out.skillDone[k]=!!s.skillDone[k];});}
   if(s.sync&&typeof s.sync==='object')out.sync=s.sync;
   if(s.meta&&s.meta.sample){
     ['practice','errors','vocab','words'].forEach(function(k){if(Array.isArray(s.meta.sample[k]))out.meta.sample[k]=s.meta.sample[k];});
@@ -1242,6 +1253,10 @@ function renderMain(){
   else if(curTab==='book')m.innerHTML=viewBook();
   else if(curTab==='bank')m.innerHTML=viewBank();
   else if(curTab==='plan')m.innerHTML=viewPlan();
+  else if(curTab==='write')m.innerHTML=viewWrite();
+  else if(curTab==='listen')m.innerHTML=viewListen();
+  else if(curTab==='read')m.innerHTML=viewRead();
+  else if(curTab==='skill')m.innerHTML=viewSkill();
   else m.innerHTML=viewMe();
   if(curTab==='me'){renderSyncTable();}
 }
@@ -1862,6 +1877,159 @@ function togglePlan(key){
   save();
   refreshAll();
 }
+/* ---------------- 视图：写译 ---------------- */
+var WRITE_PROMPTS=[
+  {t:'短视频现象的利弊',hint:'120–180 词，三段式：引入+立场 / 两面论证 / 总结+建议'},
+  {t:'Online learning 的利弊',hint:'约 145 词，先优后劣，结尾给建议'},
+  {t:'大学生是否该做兼职',hint:'120–180 词，立场明确，论据具体'}
+];
+function viewWrite(){
+  var tp=WRITE_PROMPTS.map(function(p){
+    return '<div class="wl-prompt"><div class="grow"><b>'+esc(p.t)+'</b><span class="muted">'+esc(p.hint)+'</span></div>'+
+      (canSpeak()?'<button class="speak" onclick="speak(\''+esc(p.t)+'\',\'zh-CN\')" aria-label="朗读题目">'+icon('vol',16)+'</button>':'')+
+      '<button class="btn sm line" onclick="fillWrite(\''+esc(p.t)+'\')">去写</button></div>';
+  }).join('');
+  var list=(state.writing||[]).slice().sort(function(a,b){return a.date<b.date?1:-1;}).slice(0,30);
+  var html=list.length?list.map(function(w){
+    var tx=(w.text||'').replace(/\n/g,' ');
+    return '<div class="wl-item">'+
+      '<div class="row" style="gap:6px;flex-wrap:wrap"><span class="badge '+(w.type==='翻译'?'blue':'orange')+'">'+esc(w.type)+'</span>'+
+      '<span class="muted">'+esc(w.date)+'</span>'+
+      '<button class="del" style="margin-left:auto" onclick="delWriting(\''+w.id+'\')">'+icon('trash',15)+'</button></div>'+
+      (w.topic?'<div class="q">'+esc(w.topic)+'</div>':'')+
+      '<div class="a">'+esc(tx.slice(0,160))+(tx.length>160?'…':'')+'</div>'+
+      '<div class="row" style="margin-top:8px;gap:8px"><button class="btn sm '+(w.graded?'green':'gray')+'" onclick="toggleGraded(\''+w.id+'\')">'+icon('check',14)+(w.graded?'已批改':'标已批改')+'</button>'+
+      (canSpeak()&&tx?'<button class="speak" onclick="speak(\''+esc(tx.slice(0,400))+'\',\'en-US\')">'+icon('vol',16)+'</button>':'')+'</div>'+
+    '</div>';
+  }).join(''):'<div class="empty">还没有写译记录<br>选一个题目，写完粘贴进来，标「已批改」跟踪进度</div>';
+  return ''+
+  '<div class="card">'+
+    '<h3>'+icon('edit',16)+'三段式模板<span class="sub">写作 30min / 翻译 30min</span></h3>'+
+    '<div class="muted" style="line-height:1.7">① 首段：引入话题 + 亮明立场（≈35 词）<br>② 中段：两面论证，先优后劣，各给 1 例（≈80 词）<br>③ 尾段：总结 + 建议/展望（≈35 词）<br>目标 150 词左右，不超 180；别用缩写、注意时态、必须有从句、要有明确观点。</div>'+
+  '</div>'+
+  '<div class="card">'+
+    '<h3>'+icon('target',16)+'写作题目<span class="sub">点朗读听题，点去写填到下方</span></h3>'+tp+
+  '</div>'+
+  '<div class="card">'+
+    '<h3>'+icon('plus',16)+'记一篇写译</h3>'+
+    '<div class="form-grid"><div class="field"><label for="wType">类型</label><select id="wType"><option>写作</option><option>翻译</option></select></div>'+
+    '<div class="field"><label for="wTopic">题目 / 话题</label><input type="text" id="wTopic" placeholder="例如：短视频现象的利弊"></div></div>'+
+    '<div class="field"><label for="wText">内容（英文作文或中文待译段落）</label><textarea id="wText" placeholder="把写好的内容粘这里"></textarea></div>'+
+    '<button class="btn block" onclick="addWriting()">'+icon('plus',15)+'保存</button>'+
+  '</div>'+
+  '<div class="card">'+
+    '<h3>'+icon('book',16)+'我的写译<span class="sub">'+((state.writing||[]).length)+' 篇</span></h3>'+html+
+  '</div>';
+}
+function fillWrite(topic){var el=$('#wTopic');if(el){el.value=topic;el.scrollIntoView({block:'center'});}var ta=$('#wText');if(ta)ta.focus();}
+function addWriting(){
+  var type=$('#wType')?$('#wType').value:'写作';
+  var topic=$('#wTopic')?($('#wTopic').value||'').trim():'';
+  var text=$('#wText')?($('#wText').value||'').trim():'';
+  if(!text){toast('先粘贴内容再保存');return;}
+  state.writing=state.writing||[];
+  state.writing.push({id:uid(),date:todayStr(),type:type,topic:topic,text:text,graded:false});
+  save();refreshAll();toast('已保存');
+}
+function delWriting(id){state.writing=(state.writing||[]).filter(function(x){return x.id!==id;});save();refreshAll();}
+function toggleGraded(id){var w=(state.writing||[]).find(function(x){return x.id===id;});if(w){w.graded=!w.graded;save();refreshAll();}}
+
+/* ---------------- 视图：阅读精读 ---------------- */
+function viewRead(){
+  var list=(state.reading||[]).slice().sort(function(a,b){return a.date<b.date?1:-1;}).slice(0,30);
+  var html=list.length?list.map(function(r){
+    return '<div class="wl-item">'+
+      '<div class="row" style="gap:6px;flex-wrap:wrap"><span class="muted">'+esc(r.date)+'</span>'+
+      '<button class="del" style="margin-left:auto" onclick="delReading(\''+r.id+'\')">'+icon('trash',15)+'</button></div>'+
+      '<div class="q">'+esc(r.sentence||'')+'</div>'+
+      (r.analysis?'<div class="a"><b style="color:var(--ink-2)">拆解：</b>'+esc(r.analysis)+'</div>':'')+
+    '</div>';
+  }).join(''):'<div class="empty">还没有精读笔记<br>遇到长难句，拆主干/从句/修饰记下来</div>';
+  return ''+
+  '<div class="card">'+
+    '<h3>'+icon('replay',16)+'长难句拆解<span class="sub">W1 基础期每天 1 句</span></h3>'+
+    '<div class="muted" style="line-height:1.7">① 找主干：砍掉 although / because / when / if 引导的从句，剩下的就是核心。<br>② 标从句：让步 / 原因 / 时间 / 条件分别是什么。<br>③ 看修饰：介词短语、分词、which 定语从句挂在谁身上。</div>'+
+  '</div>'+
+  '<div class="card">'+
+    '<h3>'+icon('plus',16)+'记一句精读</h3>'+
+    '<div class="field"><label for="rSent">原句</label><input type="text" id="rSent" placeholder="粘贴长难句"></div>'+
+    '<div class="field"><label for="rAna">拆解 / 笔记</label><textarea id="rAna" placeholder="主干是什么？哪个从句？修饰谁？"></textarea></div>'+
+    '<button class="btn block" onclick="addReading()">'+icon('plus',15)+'保存</button>'+
+  '</div>'+
+  '<div class="card">'+
+    '<h3>'+icon('book',16)+'我的精读<span class="sub">'+((state.reading||[]).length)+' 句</span></h3>'+html+
+  '</div>';
+}
+function addReading(){
+  var s=$('#rSent')?($('#rSent').value||'').trim():'';
+  var a=$('#rAna')?($('#rAna').value||'').trim():'';
+  if(!s&&!a){toast('填点内容再保存');return;}
+  state.reading=state.reading||[];
+  state.reading.push({id:uid(),date:todayStr(),sentence:s,analysis:a});
+  save();refreshAll();toast('已保存');
+}
+function delReading(id){state.reading=(state.reading||[]).filter(function(x){return x.id!==id;});save();refreshAll();}
+
+/* ---------------- 视图：听力专项 ---------------- */
+function viewListen(){
+  var tips=[
+    '新闻/长对话：先读选项猜场景，抓 5W1H（who/what/when/where/why/how）。',
+    '短文：首尾句常是主旨；转折词 but / however / yet 后多藏答案。',
+    '数字题：边听边记，别靠脑记；注意相近音（13/30、15/50）。',
+    '听不懂的词跳过，抓整体意思，别卡在一两个词。'
+  ];
+  var tipHTML=tips.map(function(x){return '<li>'+esc(x)+'</li>';}).join('');
+  var saved=(state.dictation||[]).length;
+  return ''+
+  '<div class="card">'+
+    '<h3>'+icon('vol',16)+'听写练习器<span class="sub">粘贴短文，点击即放</span></h3>'+
+    '<div class="field"><label for="dText">英文短文（可来自真题/外刊）</label><textarea id="dText" placeholder="粘贴一段英文，点播放逐句跟听，再对照原文改"></textarea></div>'+
+    '<div class="row" style="gap:8px;margin-top:6px">'+
+      '<button class="btn" id="apBtn" onclick="playDictation()">'+icon('play',15)+' 播放 / 暂停</button>'+
+      '<button class="btn line" onclick="toggleDictShow()">显示 / 隐藏原文</button>'+
+      '<button class="btn gray" onclick="saveDictation()">'+icon('plus',15)+'保存</button>'+
+    '</div>'+
+    '<div id="dShow" style="display:none;margin-top:10px;padding:10px 12px;background:#FBF7F1;border-radius:10px;font-size:13px;color:var(--ink-2);white-space:pre-wrap"></div>'+
+    '<div class="muted" style="margin-top:8px">已保存 '+saved+' 段听写素材</div>'+
+  '</div>'+
+  '<div class="card">'+
+    '<h3>'+icon('target',16)+'听力解题技巧</h3>'+
+    '<ul class="plan-focus">'+tipHTML+'</ul>'+
+  '</div>';
+}
+function playDictation(){var el=$('#dText');if(el&&el.value.trim())playScript(el.value,'dict');}
+function toggleDictShow(){var el=$('#dText'),box=$('#dShow');if(!box)return;if(box.style.display==='none'){box.textContent=el?el.value:'';box.style.display='block';}else{box.style.display='none';}}
+function saveDictation(){var el=$('#dText');if(!el||!el.value.trim()){toast('先粘贴内容');return;}state.dictation=state.dictation||[];state.dictation.push({id:uid(),date:todayStr(),text:el.value.trim()});save();refreshAll();toast('已保存');}
+
+/* ---------------- 视图：技巧速记卡 ---------------- */
+var SKILLS=[
+  {k:'听力',steps:['先读选项猜场景','抓 5W1H 与转折词','数字边听边记','整体意思优先'],pit:['相近音混淆','被生词卡住']},
+  {k:'阅读',steps:['先题后文定位','同义替换是答案','排除无中生有/偷换概念','主旨看首尾段'],pit:['主观臆断','定位错段']},
+  {k:'写译',steps:['三段式骨架先搭','写作先优后劣给例','翻译直译保主干','有从句+明确观点'],pit:['缩写/时态错','无观点/超词数']},
+  {k:'词汇',steps:['高频词优先','语境记搭配','真题生词回炉','词根词缀辅助'],pit:['只背中文义','不记搭配']},
+  {k:'真题',steps:['严格计时整套','错题必进错本','弱项周补','看正确率趋势'],pit:['只做单项','不复盘']}
+];
+function viewSkill(){
+  var done=0;
+  var cards=SKILLS.map(function(s){
+    var ok=!!(state.skillDone&&state.skillDone[s.k]);
+    if(ok)done++;
+    return '<div class="skill-card'+(ok?' ok':'')+'">'+
+      '<div class="row" style="gap:6px"><h3>'+esc(s.k)+'</h3>'+
+      '<button class="btn sm '+(ok?'green':'gray')+'" style="margin-left:auto" onclick="toggleSkill(\''+esc(s.k)+'\')">'+icon('check',14)+(ok?'已掌握':'标记掌握')+'</button></div>'+
+      '<div class="skill-sub">步骤</div><ul class="plan-focus">'+s.steps.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>'+
+      '<div class="skill-sub">易错</div><ul class="plan-focus">'+s.pit.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>'+
+    '</div>';
+  }).join('');
+  return ''+
+  '<div class="card">'+
+    '<h3>'+icon('star',16)+'技巧掌握度<span class="sub">'+done+' / '+SKILLS.length+' 已掌握</span></h3>'+
+    '<div class="pp-track"><div class="pp-fill" style="width:'+Math.round(done/SKILLS.length*100)+'%;background:var(--green)"></div></div>'+
+  '</div>'+
+  '<div class="skill-grid">'+cards+'</div>';
+}
+function toggleSkill(k){state.skillDone=state.skillDone||{};state.skillDone[k]=!state.skillDone[k];save();refreshAll();}
+
 function switchTab(id){curTab=id;refreshAll();window.scrollTo(0,0);}
 function setFilter(k,v){bookFilter[k]=v;refreshAll();}
 function addPractice(){
@@ -2173,25 +2341,8 @@ function bankQHtml(){
   var id=bankSession.list[bankSession.idx];
   var it=BANK_MAP[id];
   var total=bankSession.list.length;
-  var playerHtml=it.script?(
-    (function(){
-      if(AP.id!==it.id){try{window.speechSynthesis.cancel();}catch(e){}AP.id=it.id;AP.text=it.script;AP.est=apEstimate(AP.text,AP.rate);AP.pos=0;AP.playing=false;AP.paused=false;}
-      return '<div class="bank-player">'
-        +'<button class="ap-btn" id="apToggle" onclick="apToggle()" aria-label="播放或暂停">'+icon('play',20)+'</button>'
-        +'<div class="ap-body">'
-          +'<div class="ap-bar" id="apBar"><div class="ap-fill" id="apFill"></div></div>'
-          +'<div class="ap-ctrls">'
-            +'<span class="ap-time" id="apTime">0:00 / 0:00</span>'
-            +'<label class="ap-ctrl">音量<input type="range" min="0" max="100" value="'+Math.round(AP.vol*100)+'" oninput="apSetVol(this.value)"></label>'
-            +'<label class="ap-ctrl">语速<input type="range" min="60" max="120" value="'+Math.round(AP.rate*100)+'" oninput="apSetRate(this.value)"></label>'
-            +'<button class="ap-mini" onclick="apReplay()">'+icon('replay',13)+'重播</button>'
-          +'</div>'
-          +'<div class="ap-hint">浏览器朗读（TTS），进度为估算值，进度条暂不可拖动</div>'
-        +'</div>'
-      +'</div>';
-    })()
-  ):'';
-  requestAnimationFrame(apRender);
+  var playerHtml=it.script?('<div class="bank-player"><button class="btn grow" id="apBtn" onclick="playBankScript(\''+it.id+'\')">'+icon('play',16)+' 播放听力</button></div>'):'';
+
   var optsHtml=it.opts.map(function(o,i){
     var cls='opt',dis='';
     if(bankSession.graded){dis='disabled';if(i===it.ans)cls+=' ok';if(i===bankSession.sel&&i!==it.ans)cls+=' no';}
@@ -2222,7 +2373,7 @@ function bankSummaryHtml(){
    +'<button class="btn grow" onclick="startBank()">再来一组</button></div></div>';
 }
 function startBank(){
-  apStop();
+  stopSpeak();
   var ids=BANK.map(function(x){return x.id;});
   for(var i=ids.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=ids[i];ids[i]=ids[j];ids[j]=t;}
   bankSession={list:ids.slice(0,Math.min(10,ids.length)),idx:0,sel:null,graded:false,results:[]};
@@ -2249,7 +2400,7 @@ function bankGrade(){
 }
 function bankNext(){
   if(bankSession===null)return;
-  apStop();
+  stopSpeak();
   if(bankSession.idx>=bankSession.list.length-1){bankSession.idx=bankSession.list.length;refreshAll();return;}
   bankSession.idx++;bankSession.sel=null;bankSession.graded=false;refreshAll();
 }
