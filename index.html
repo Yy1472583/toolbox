@@ -831,7 +831,7 @@ function sampleState(){
   var t=todayStr();
   var s={
     version:1,
-    settings:{dailyNew:10,examDate:defaultExamDate(),level:'CET4',bank:{attempts:0,correct:0,byType:{},done:{}}},
+    settings:{dailyNew:10,dailyGoal:5,examDate:defaultExamDate(),level:'CET4',bank:{attempts:0,correct:0,byType:{},done:{}}},
     wordProgress:{},
     dailyQueue:null,
     vocab:[],
@@ -880,6 +880,7 @@ function normalizeState(s){
   if(!s||typeof s!=='object')return d;
   var out=base;
   out.settings.dailyNew=clamp(parseInt((s.settings||{}).dailyNew,10)||10,1,50);
+  out.settings.dailyGoal=clamp(parseInt((s.settings||{}).dailyGoal,10)||5,1,50);
   out.settings.examDate=(s.settings&&s.settings.examDate)?String(s.settings.examDate):defaultExamDate();
   out.settings.bank=(s.settings&&s.settings.bank)?s.settings.bank:{attempts:0,correct:0,byType:{},done:{}};
   out.settings.level=(s.settings&&s.settings.level)||'CET4';
@@ -1175,6 +1176,16 @@ function typeStat(){
     return {type:ty,total:tot,correct:cor,rate:tot?Math.round(cor*100/tot):0};
   });
 }
+function todayDone(){return state.dayStats[todayStr()]||0;}
+function dailyGoal(){return state.settings.dailyGoal||5;}
+function maybeAutoCheckin(){
+  var t=todayStr();
+  if(todayDone()>=dailyGoal()&&state.checkins.indexOf(t)<0){
+    state.checkins.push(t);save();syncMark('day:'+t);
+    toast('今日任务完成，已自动打卡');return true;
+  }
+  return false;
+}
 function overview(){
   var learned=Object.keys(state.wordProgress).length;
   var mastered=0;
@@ -1185,7 +1196,7 @@ function overview(){
     learned:learned,mastered:mastered,total:WORDS.length,
     streak:calcStreak(),
     pTotal:pt,pRate:pt?Math.round(pc*100/pt):0,
-    errCount:state.errors.length,
+    errCount:state.errors.length,todayDone:todayDone(),goal:dailyGoal(),
     vocabCount:state.vocab.length,
     records:state.practice.length+state.errors.length+state.vocab.length+learned
   };
@@ -1241,10 +1252,10 @@ function ringSVG(done,total){
 }
 function renderHero(){
   var el=$('#hero');if(!el)return;
-  var t=todayStr(),left=queueLeft(t).length,total=queueTotal(t),done=total-left;
+  var t=todayStr(),total=dailyGoal(),done=Math.min(todayDone(),total),left=Math.max(0,total-done);
   var de=dueErrors(t).length,mp=missPractice(t);
   var ov=overview();
-  var pct=ov.total?Math.round(ov.learned*100/ov.total):0;
+  var pct=total?Math.round(done*100/total):0;
   var hasTodo=(left>0||de>0||mp>0);
   el.innerHTML=
     '<div class="hero-l">'+
@@ -1257,55 +1268,55 @@ function renderHero(){
       '<circle cx="60" cy="60" r="52" fill="none" stroke="#FB923C" stroke-width="9" stroke-linecap="round" stroke-dasharray="'+(2*Math.PI*52*pct/100).toFixed(1)+' 400" transform="rotate(-90 60 60)"/>'+
       '</svg><span>'+pct+'%</span></div>'+
     '<div class="hero-r">'+
-      '<div class="hero-stat'+(left>0?' urgent':'')+'" onclick="'+(left>0?'openDeck()':'switchTab(\'today\')')+'"><b style="'+(left>0?'color:#FCA5A5':'')+'">'+left+'<i>词</i></b><span>今日剩余</span></div>'+
+      '<div class="hero-stat'+(left>0?' urgent':'')+'" onclick="'+(left>0?'switchTab(\'bank\')':'switchTab(\'today\')')+'"><b style="'+(left>0?'color:#FCA5A5':'')+'">'+left+'<i>题</i></b><span>今日剩余</span></div>'+
       '<div class="hero-stat" onclick="switchTab(\'quiz\')"><b style="'+(mp>0?'color:#FCA5A5':'')+'">'+mp+'<i>项</i></b><span>未记录刷题</span></div>'+
       '<div class="hero-stat" onclick="switchTab(\'book\')"><b style="'+(de>0?'color:#FCA5A5':'')+'">'+de+'<i>题</i></b><span>到期错题</span></div>'+
       '<div class="hero-prog"><div class="bar"><i style="width:'+(total?(done*100/total).toFixed(0):0)+'%"></i></div>'+
       '<div class="lab"><span>今日进度</span><b>'+done+'/'+total+'</b></div></div>'+
     '</div>'+
     (hasTodo
-      ? '<button class="btn hero-btn" onclick="'+(left>0?'openDeck()':(de>0?'switchTab(\'book\')':'switchTab(\'quiz\')'))+'">'+icon('zap',16)+'去处理</button>'
+      ? '<button class="btn hero-btn" onclick="'+(left>0?'switchTab(\'bank\')':(de>0?'switchTab(\'book\')':'switchTab(\'quiz\')'))+'">'+icon('zap',16)+'去处理</button>'
       : '<div class="hero-done">'+icon('check',16)+'<span>今天已清空</span></div>');
 }
 function renderSideToday(){
   var el=$('#sideToday');if(!el)return;
-  var t=todayStr(),left=queueLeft(t),de=dueErrors(t),ov=overview();
+  var t=todayStr(),de=dueErrors(t),ov=overview(),total=dailyGoal(),done=Math.min(todayDone(),total),left=Math.max(0,total-done);
   var body='';
-  if(left.length>0){
-    body='<div class="st-num">'+left.length+'<b>词</b></div>'+
-      '<div class="st-lab">今日剩余'+(de.length>0?' · '+de.length+' 道错题到期':'')+'</div>'+
-      '<div class="st-row"><span>今日已背</span><b>'+(queueTotal(t)-left.length)+' 词</b></div>'+
-      '<div class="st-row"><span>今日复习量</span><b>'+(state.dayStats[t]||0)+' 次</b></div>'+
+  if(left>0){
+    body='<div class="st-num">'+left+'<b>题</b></div>'+
+      '<div class="st-lab">今日还剩'+(de.length>0?' · '+de.length+' 道错题到期':'')+'</div>'+
+      '<div class="st-row"><span>今日已做</span><b>'+done+' 题</b></div>'+
+      '<div class="st-row"><span>今日目标</span><b>'+total+' 题</b></div>'+
       '<div class="st-row"><span>距考试</span><b>'+countdown()+' 天</b></div>'+
-      '<button class="btn block" onclick="openDeck()">继续背词</button>'+
-      '<div class="st-foot">背完今日队列自动打卡，连续天数续上</div>';
+      '<button class="btn block" onclick="switchTab(\'bank\')">去刷题</button>'+
+      '<div class="st-foot">做完每日题量自动打卡，连续天数续上</div>';
   }else if(de.length>0){
     body='<div class="st-num">'+de.length+'<b>题</b></div>'+
       '<div class="st-lab">道错题到期该复习</div>'+
       '<div class="st-row"><span>距考试</span><b>'+countdown()+' 天</b></div>'+
       '<button class="btn block" onclick="switchTab(\'book\')">去复习错题</button>';
   }else{
-    body='<div class="st-num">0<b>词</b></div>'+
-      '<div class="st-lab">今日任务已清空，明天再来</div>'+
-      '<div class="st-row"><span>连续背词</span><b>'+ov.streak+' 天</b></div>'+
-      '<div class="st-row"><span>已学 / 词库</span><b>'+ov.learned+' / '+ov.total+'</b></div>'+
+    body='<div class="st-num">'+done+'<b>题</b></div>'+
+      '<div class="st-lab">今日目标已完成，明天再来</div>'+
+      '<div class="st-row"><span>连续打卡</span><b>'+ov.streak+' 天</b></div>'+
+      '<div class="st-row"><span>累计答题</span><b>'+ov.pTotal+' 题</b></div>'+
       '<div class="st-row"><span>距考试</span><b>'+countdown()+' 天</b></div>'+
-      '<div class="st-foot">可在「我的」调整每日新词数与考试日期</div>';
+      '<div class="st-foot">可在「我的」调整每日题量目标与考试日期</div>';
   }
   el.innerHTML=body;
 }
 
 /* ---------------- 视图：今日 ---------------- */
 function viewToday(){
-  var t=todayStr(),ov=overview(),q=ensureQueue(t),left=queueLeft(t);
-  var done=q.ids.length-left.length;
+  var t=todayStr(),ov=overview(),q=ensureQueue(t);
+  var total=dailyGoal(),done=Math.min(todayDone(),total),left=Math.max(0,total-done);
   var heat=heatDays();
   var heatHTML=heat.map(function(d){
     var lv=heatLevel(d.count);
     return '<i class="'+(lv?'l'+lv:'')+(d.isToday?' today':'')+'" title="'+d.date+' · '+d.count+' 次"></i>';
   }).join('');
   var tasks=[];
-  tasks.push({done:left.length===0,text:'背完今日队列 '+done+'/'+q.ids.length+' 词（新词 '+q.newCount+'）',act:'openDeck()'});
+  tasks.push({done:left===0,text:'完成每日题量 '+done+'/'+total+' 题',act:'switchTab(\'bank\')'});
   tasks.push({done:!missPractice(t),text:'记录今天的刷题数据（听力/阅读/写作/翻译）',act:'switchTab(\'quiz\')'});
   var de=dueErrors(t);
   tasks.push({done:de.length===0,text:de.length?('复习 '+de.length+' 道到期错题'):'没有到期错题',act:'switchTab(\'book\')'});
@@ -1317,15 +1328,15 @@ function viewToday(){
   '<div class="today-grid">'+
     '<div class="sub">'+
       '<div class="card">'+
-        '<h3>'+icon('target',16)+'今日背词<span class="sub">剩余 '+left.length+' · 新词 '+q.newCount+'</span></h3>'+
-        '<div class="ring-wrap">'+ringSVG(done,q.ids.length)+
+        '<h3>'+icon('target',16)+'今日题量<span class="sub">剩余 '+left+' · 目标 '+total+'</span></h3>'+
+        '<div class="ring-wrap">'+ringSVG(done,total)+
           '<div class="grow">'+
             '<div class="muted-2" style="margin-bottom:10px">'+
-              (left.length?('今天还有 <b style="color:var(--ink)">'+left.length+'</b> 个词要过一遍，翻卡后选「认识 / 不认识」即可。')
-                          :'今日队列已清空，连续 '+ov.streak+' 天，稳住。')+
+              (left?('今天还有 <b style="color:var(--ink)">'+left+'</b> 道题，做完自动打卡。')
+                   :'今日题量已完成，已自动打卡，连续 '+ov.streak+' 天，稳住。')+
             '</div>'+
-            '<button class="btn block" onclick="openDeck()">'+icon('zap',16)+(left.length?'开始背词':'再看一遍')+'</button>'+
-            '<div class="muted" style="margin-top:8px">复习间隔 1 / 2 / 4 / 7 / 15 / 30 天，连续 3 次不认识的词改到明天</div>'+
+            '<button class="btn block" onclick="switchTab(\'bank\')">'+icon('zap',16)+(left?'去刷真题':'再刷几道')+'</button>'+
+            '<div class="muted" style="margin-top:8px">答错的题会自动进错本，按 1 / 2 / 4 / 7 / 15 / 30 天复习</div>'+
           '</div>'+
         '</div>'+
       '</div>'+
@@ -1340,14 +1351,14 @@ function viewToday(){
         '<div class="heat">'+heatHTML+'</div>'+
         '<div class="heat-foot"><span>30 天前 → 今天</span>'+
           '<span class="heat-legend">少<i style="background:#F5EFE4"></i><i style="background:#FFE0BE"></i><i style="background:#FB923C"></i><i style="background:#EA580C"></i>多</span></div>'+
-        '<div class="cal-mini-stats"><div>连续 <b>'+ov.streak+'</b> 天</div><div>今日 <b>'+(state.dayStats[t]||0)+'</b> 次</div><div>累计 <b>'+ov.learned+'</b> 词</div></div>'+
+        '<div class="cal-mini-stats"><div>连续 <b>'+ov.streak+'</b> 天</div><div>今日 <b>'+done+'</b> 题</div><div>累计 <b>'+ov.pTotal+'</b> 题</div></div>'+
       '</div>'+
       '<div class="card">'+
         '<h3>'+icon('award',16)+'今日战绩</h3>'+
         '<div class="stat-grid">'+
-          '<div class="cell"><b>'+done+'</b><span>今日已背</span></div>'+
-          '<div class="cell"><b>'+ov.learned+'</b><span>已学词</span></div>'+
-          '<div class="cell"><b>'+ov.mastered+'</b><span>已掌握</span></div>'+
+          '<div class="cell"><b>'+done+'</b><span>今日做题</span></div>'+
+          '<div class="cell"><b>'+ov.pTotal+'</b><span>累计刷题</span></div>'+
+          '<div class="cell"><b>'+ov.pRate+'%</b><span>总正确率</span></div>'+
           '<div class="cell"><b>'+ov.vocabCount+'</b><span>生词本</span></div>'+
         '</div>'+
         '<button class="btn ghost block" style="margin-top:12px" onclick="makePoster()">'+icon('down',15)+'下载今日战绩图</button>'+
@@ -1547,8 +1558,8 @@ function viewMe(){
   '<div class="section">'+
     '<div class="section-head"><h4>数据概览</h4></div>'+
     '<div class="card me-ov"><div class="stat-grid">'+
-      '<div class="cell"><b>'+ov.learned+'</b><span>已学词</span></div>'+
-      '<div class="cell"><b>'+ov.mastered+'</b><span>已掌握</span></div>'+
+      '<div class="cell"><b>'+ov.todayDone+'</b><span>今日做题</span></div>'+
+      '<div class="cell"><b>'+ov.pTotal+'</b><span>累计刷题</span></div>'+
       '<div class="cell"><b>'+ov.streak+'</b><span>连续天数</span></div>'+
       '<div class="cell"><b>'+ov.pTotal+'</b><span>累计刷题</span></div>'+
       '<div class="cell"><b>'+ov.pRate+'%</b><span>总正确率</span></div>'+
@@ -1559,7 +1570,7 @@ function viewMe(){
     '<div class="sub">'+
       '<div class="card">'+
         '<h3>'+icon('edit',16)+'备考设置</h3>'+
-        '<div class="field"><label for="sDaily">每天新词数</label><input type="number" id="sDaily" inputmode="numeric" min="1" max="50" value="'+state.settings.dailyNew+'"></div>'+
+        '<div class="field"><label for="sDaily">每日题量目标</label><input type="number" id="sDaily" inputmode="numeric" min="1" max="50" value="'+dailyGoal()+'"></div>'+
         '<div class="field"><label for="sExam">考试日期</label><input type="date" id="sExam" value="'+esc(state.settings.examDate)+'"></div>'+
         '<button class="btn block" onclick="saveSettings()">保存设置</button>'+
         '<div class="muted" style="margin-top:8px">默认取当年 12 月第三个周六，准确时间以教育部考试中心官方公告为准。</div>'+
@@ -1812,14 +1823,14 @@ function removeVocab(id){
 function saveSettings(){
   var n=parseInt($('#sDaily').value,10);
   var d=$('#sExam').value;
-  if(!n||n<1){toast('每日新词数至少 1');return;}
+  if(!n||n<1){toast('每日题量目标至少 1');return;}
   if(!d){toast('请选择考试日期');return;}
   state.settings.dailyNew=clamp(n,1,50);
+  state.settings.dailyGoal=clamp(n,1,50);
   state.settings.examDate=d;
   state.meta.settingsT=Date.now();
-  /* 新词数变更：清空今日队列缓存，下次进入重新发词 */
-  if(state.dailyQueue&&state.dailyQueue.date===todayStr())state.dailyQueue=null;
   save();syncMark('settings');
+  maybeAutoCheckin();
   toast('设置已保存');
   refreshAll();
 }
@@ -2128,7 +2139,9 @@ function bankGrade(){
   var b=state.settings.bank;if(!b.byType)b.byType={};if(!b.byType[it.type])b.byType[it.type]={a:0,c:0};
   b.byType[it.type].a++;if(ok)b.byType[it.type].c++;
   b.attempts++;if(ok)b.correct++;if(!b.done)b.done={};b.done[it.id]=1;
+  var td=todayStr();state.dayStats[td]=(state.dayStats[td]||0)+1;
   save();syncMark('settings');
+  maybeAutoCheckin();
   if(!ok){
     var id=uid();
     state.errors.push({id:id,date:todayStr(),type:it.type,reason:'题库答错',question:it.q,idea:'正确答案：'+it.opts[it.ans]+'。'+it.exp,stage:0,next:addDays(todayStr(),ERR_INTERVALS[0]),_t:Date.now()});
@@ -2160,9 +2173,6 @@ document.addEventListener('DOMContentLoaded',function(){
   $('#posterMask').addEventListener('click',function(e){if(e.target===this)closePoster();});
   document.addEventListener('keydown',function(e){
     if(e.key==='Escape'){closeModal();closePoster();}
-    if(deck.open&&e.key===' '){e.preventDefault();flipCard();}
-    if(deck.open&&(e.key==='1'||e.key==='ArrowLeft'))answerCard(false);
-    if(deck.open&&(e.key==='2'||e.key==='ArrowRight'))answerCard(true);
   });
 });
 </script>
