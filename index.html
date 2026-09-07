@@ -865,6 +865,7 @@ function sampleState(){
     reading:[],
     dictation:[],
     listenPractice:{},
+    readPractice:{},
     skillDone:{},
     sync:{},
     meta:{sample:{practice:[],errors:[],vocab:[],words:[]},backupDismiss:0,syncT:0}  };
@@ -902,7 +903,7 @@ function sampleState(){
 /* ---------------- 状态读写 ---------------- */
 function normalizeState(s){
   var d=sampleState();
-  var base={version:1,settings:{},wordProgress:{},dailyQueue:null,vocab:[],practice:[],errors:[],checkins:[],dayStats:{},planChecks:{},writing:[],reading:[],dictation:[],listenPractice:{},skillDone:{},sync:{},meta:{sample:{practice:[],errors:[],vocab:[],words:[]},backupDismiss:0,syncT:0}};
+  var base={version:1,settings:{},wordProgress:{},dailyQueue:null,vocab:[],practice:[],errors:[],checkins:[],dayStats:{},planChecks:{},writing:[],reading:[],dictation:[],listenPractice:{},readPractice:{},skillDone:{},sync:{},meta:{sample:{practice:[],errors:[],vocab:[],words:[]},backupDismiss:0,syncT:0}};
   if(!s||typeof s!=='object')return d;
   var out=base;
   out.settings.dailyNew=clamp(parseInt((s.settings||{}).dailyNew,10)||10,1,50);
@@ -937,6 +938,7 @@ function normalizeState(s){
   if(Array.isArray(s.reading))out.reading=s.reading.filter(function(x){return x&&x.id;}).map(function(x){return {id:x.id||uid(),date:String(x.date||todayStr()).slice(0,10),sentence:x.sentence||'',analysis:x.analysis||''};});
   if(Array.isArray(s.dictation))out.dictation=s.dictation.filter(function(x){return x&&x.id;}).map(function(x){return {id:x.id||uid(),date:String(x.date||todayStr()).slice(0,10),text:x.text||''};});
   if(s.listenPractice&&typeof s.listenPractice==='object'){out.listenPractice={};Object.keys(s.listenPractice).forEach(function(k){var r=s.listenPractice[k];if(r)out.listenPractice[k]={picked:r.picked==null?null:parseInt(r.picked,10),correct:!!r.correct,_t:r._t||0};});}
+  if(s.readPractice&&typeof s.readPractice==='object'){out.readPractice={};Object.keys(s.readPractice).forEach(function(k){var r=s.readPractice[k];if(Array.isArray(r))out.readPractice[k]=r.map(function(v){return v==null?null:parseInt(v,10);});});}
   if(s.skillDone&&typeof s.skillDone==='object'){out.skillDone={};Object.keys(s.skillDone).forEach(function(k){out.skillDone[k]=!!s.skillDone[k];});}
   if(s.sync&&typeof s.sync==='object')out.sync=s.sync;
   if(s.meta&&s.meta.sample){
@@ -2108,6 +2110,93 @@ function delWriting(id){state.writing=(state.writing||[]).filter(function(x){ret
 function toggleGraded(id){var w=(state.writing||[]).find(function(x){return x.id===id;});if(w){w.graded=!w.graded;save();refreshAll();}}
 
 /* ---------------- 视图：阅读精读 ---------------- */
+/* ---------------- 阅读理解真题训练（2002 年 1 月真题） ---------------- */
+var READ_PRACTICE=[
+  {id:'rp1',title:'Passage One（2002 年 1 月真题）',passage:"Some pessimistic experts feel that the automobile is bound to fall into disuse. They see a day in the not-too-distant future when all autos will be abandoned and allowed to rust. Other authorities, however, think the auto is here to stay. They hold that the car will remain a leading means of urban travel in the foreseeable future. The motorcar will undoubtedly change significantly over the next 30 years. It should become smaller, safer, and more economical, and should not be powered by the gasoline engine. The car of the future should be far more pollution-free than present types. Regardless of its power source, the auto in the future will still be the main problem in urban traffic congestion. One proposed solution to this problem is the automated highway system. When the auto enters the highway system, a retractable arm will drop from the auto and make contact with a rail, which is similar to those powering subway trains electrically. Once attached to the rail, the car will become electrically powered from the system, and control of the vehicle will pass to a central computer. The computer will then monitor all of the car's movements. The driver will use a telephone to dial instructions about his destination into the system. The computer will calculate the best route, and reserve space for the car all the way to the correct exit from the highway. The driver will then be free to relax and wait for the buzzer that will warn him of his coming exit. It is estimated that an automated highway will be able to handle 10,000 vehicles per hour, compared with the 1,500 to 2,000 vehicles that can be carried by a present-day highway.",
+    qs:[
+      {q:'One significant improvement in the future car will probably be ________.',opts:['its power source','its driving system','its monitoring system','its seating capacity'],ans:0,exp:'首段点出未来车更小、更安全、更经济、非汽油驱动、更环保——核心改进在动力来源（power source）。'},
+      {q:"What is the author's main concern?",opts:['How to render automobiles pollution-free.','How to make smaller and safer automobiles.','How to solve the problem of traffic jams.','How to develop an automated subway system.'],ans:2,exp:'文中说无论动力如何，未来汽车仍是城市交通拥堵的主要问题，并提自动高速系统求解——作者关心的是交通堵塞。'},
+      {q:'What provides autos with electric power in an automated highway system?',opts:['A rail.','An engine.','A retractable arm.','A computer controller.'],ans:0,exp:'原文：once attached to the rail, the car becomes electrically powered from the system——由铁轨供电。'},
+      {q:'In an automated highway system, all the driver needs to do is ________.',opts:['keep in the right lane','wait to arrive at his destination','keep in constant touch with the computer center','inform the system of his destination by phone'],ans:3,exp:'原文：the driver will use a telephone to dial instructions about his destination into the system——用电话告知目的地。'},
+      {q:"What is the author's attitude toward the future of autos?",opts:['Enthusiastic.','Pessimistic.','Optimistic.','Cautious.'],ans:2,exp:'作者认为汽车会继续存在并显著改进，态度乐观（optimistic）。'}
+    ]},
+  {id:'rp2',title:'Passage Two（2002 年 1 月真题）',passage:"Foxes and farmers have never got on well. These small dog-like animals have long been accused of killing farm animals. They are officially classified as harmful and farmers try to keep their numbers down by shooting or poisoning them. Farmers can also call on the services of their local hunt to control the fox population. Hunting consists of pursuing a fox across the countryside, with a group of specially trained dogs, followed by men and women riding horses. When the dogs eventually catch the fox they kill it or a hunter shoots it. People who take part in hunting think of as a sport; they wear a special uniform of red coats and white trousers, and follow strict codes of behavior. But owning a horse and hunting regularly is expensive, so most hunters are wealthy. It is estimated that up to 100,000 people watch or take part in fox hunting. But over the last couple of decades the number of people opposed to fox hunting, because they think it is brutal, has risen sharply. Nowadays it is rare for a hunt to pass off without some kind of confrontation between hunters and hunt saboteurs. Sometimes these incidents lead to violence, but mostly saboteurs interfere with the hunt by misleading riders and disturbing the trail of the fox's smell, which the dogs follow. Noisy confrontations between hunters and saboteurs have become so common that they are almost as much a part of hunting as the pursuit of foxes itself. But this year supporters of fox hunting face a much bigger threat to their sport. A Labour Party Member of the Parliament, Mike Foster, is trying to get Parliament to approve a new law which will make the hunting of wild animals with dogs illegal. If the law is passed, wild animals like foxes will be protected under the ban in Britain.",
+    qs:[
+      {q:'Rich people in Britain have been hunting foxes ________.',opts:['for recreation','in the interests of the farmers','to limit the fox population','to show off their wealth'],ans:0,exp:'原文：People who take part in hunting think of as a sport——富人把猎狐当娱乐（recreation）。'},
+      {q:'What is special about fox hunting in Britain?',opts:['It involves the use of a deadly poison.','It is a costly event which rarely occurs.','The hunters have set rules to follow.','The hunters have to go through strict training.'],ans:2,exp:'原文：they follow strict codes of behavior——猎手有严格的行为规范要遵守。'},
+      {q:'Fox hunting opponents often interfere in the game ________.',opts:['by resorting to violence','by confusing the fox hunters','by taking legal action','by demonstrating on the scene'],ans:1,exp:'原文：saboteurs interfere with the hunt by misleading riders——通过误导骑手来干扰。'},
+      {q:'A new law may be passed by the British Parliament to ________.',opts:['prohibit farmers from hunting foxes','forbid hunting foxes with dogs','stop hunting wild animals in the countryside','prevent large-scale fox hunting'],ans:1,exp:'原文：make the hunting of wild animals with dogs illegal——禁止用狗猎杀野生动物。'},
+      {q:'It can be inferred from the passage that ________.',opts:['killing foxes with poison is illegal','limiting the fox population is unnecessary','hunting foxes with dogs is considered cruel and violent','fox-hunting often leads to confrontation between the poor and the rich'],ans:2,exp:'反对者认为猎狐残酷（brutal），且常发生对抗，可推知用狗猎狐被视为残忍暴力。'}
+    ]},
+  {id:'rp3',title:'Passage Three（2002 年 1 月真题）',passage:"For an increasing number of students at American universities, Old is suddenly in. The reason is obvious: the graying of America means jobs, coupled with the aging of the baby-boom generation, a longer life span means that the nation's elderly population is bound to expand significantly over the next 50 years. By 2050, 25 percent of all Americans will be older than 65, up from 14 percent in 1995. The change poses profound questions for government and society, of course. But it also creates career opportunities in medicine and health professions, and in law and business as well. \"In addition to the doctors, we're going to need more sociologists, biologists, urban planners and specialized lawyers,\" says Professor Edward Schneider of the University of Southern California's School of Gerontology. Lawyers can specialize in \"elder law,\" which covers everything from trusts and estates to nursing-home abuse and age discrimination. Businessmen see huge opportunities in the elder market because the baby boomers, 74 million strong, are likely to be the wealthiest group of retirees in human history. \"Any student who combines an expert knowledge in gerontology with, say, an MBA or law degree will have a license to print money,\" one professor says. Margarite Santos is a 21-year-old senior at USC. She began college as a biology major but found she was \"really bored with bacteria.\" So she took a class in gerontology and discovered that she liked it. She says, \"I did volunteer work in retirement homes and it was very satisfying.\"",
+    qs:[
+      {q:'"... Old is suddenly in" most probably means "________".',opts:['America has suddenly become a nation of old people','gerontology has suddenly become popular','more elderly professors are found on American campuses','American colleges have realized the need of enrolling older students'],ans:1,exp:'下文讲老年学相关专业/就业走热，Old is in 指“老年学”突然流行。'},
+      {q:'With the aging of America, lawyers can benefit ________.',opts:['from the adoption of the "elder law"','from rendering special services to the elderly','by enriching their professional knowledge','by winning the trust of the elderly to promote their own interests'],ans:1,exp:'律师可专攻 elder law 为老人提供专门服务而获益。'},
+      {q:'Why can businessmen make money in the emerging elder market?',opts:['Retirees are more generous in spending money.','They can employ more gerontologists.','The elderly possess an enormous purchasing power.','There are more elderly people working than before.'],ans:2,exp:'婴儿潮一代是有史以来最富裕的退休群体，老人有巨大购买力。'},
+      {q:'Who can make big money in the new century according to the passage?',opts:['Retirees who are business-minded.','The volunteer workers in retirement homes.','College graduates with an MBA or law degree.','Professionals with a good knowledge of gerontology.'],ans:3,exp:'原文：combines gerontology knowledge with MBA/law = license to print money——懂老年学的专业人才。'},
+      {q:'It can be seen from the passage that the expansion of America\'s elderly population ________.',opts:['will provide good job opportunities in many areas','will impose an unbearable burden on society','may lead to nursing home abuse and age discrimination','will create new fields of study in universities'],ans:0,exp:'原文：creates career opportunities in medicine, health, law and business——多领域就业机会。'}
+    ]},
+  {id:'rp4',title:'Passage Four（2002 年 1 月真题）',passage:"The decline in moral standards—which has long concerned social analysts—has at last captured the attention of average Americans. And Jean Bethke Elshtain, for one, is glad. The fact the ordinary citizens are now starting to think seriously about the nation's moral climate, says this ethics professor at the University of Chicago, is reason to hope that new ideas will come forward to improve it. But the challenge is not to be underestimated. Materialism and individualism in American society are the biggest obstacles. \"The thought that 'I'm in it for me' has become deeply rooted in the national consciousness,\" Ms. Elshtain says. Some of this can be attributed to the disintegration of traditional communities, in which neighbors looked out for one another, she says. With today's greater mobility and with so many couples working, those bonds have been weakened, replaced by a greater emphasis on self. In a 1996 poll of Americans, loss of morality topped the list of the biggest problems facing the U.S. and Elshtain says the public is correct to sense that: Data show that Americans are struggling with problems unheard of in the 1950s, such as classroom violence and a high rate of births to unmarried mothers. The desire for a higher moral standard is not a lament for some nonexistent \"golden age,\" Elshtain says, nor is it a wishful longing for a time that denied opportunities to women and minorities. Most people, in fact, favor the lessening of prejudice. Moral decline will not be reversed until people find ways to counter the materialism in society, she says. \"Slowly, you recognize that the things that matter are those that can't be bought.\"",
+    qs:[
+      {q:'Professor Elshtain is pleased to see that Americans ________.',opts:['have adapted to a new set of moral standards','are longing for the return of the good old days','have realized the importance of material things','are awakening to the lowering of their moral standards'],ans:3,exp:'她高兴是因为普通民众开始认真思考道德状况下滑——即意识到道德水准在降低。'},
+      {q:'The moral decline of American society is caused mainly by ________.',opts:['its growing wealth','the self-centeredness of individuals','underestimating the impact of social changes','the prejudice against women and minorities'],ans:1,exp:'原文：Materialism and individualism... biggest obstacles；“I’m in it for me” 根深蒂固——个人中心主义。'},
+      {q:'Which of the following characterizes the traditional communities?',opts:['Great mobility.','Concern for one\'s neighbors.','Emphasis on individual effort.','Ever-weakening social bonds.'],ans:1,exp:'原文：traditional communities, in which neighbors looked out for one another——邻里互相关照。'},
+      {q:'In the 1950s, classroom violence ________.',opts:['was something unheard of','was by no means a rare occurrence','attracted a lot of public attention','began to appear in analysts\' data'],ans:0,exp:'原文：problems unheard of in the 1950s, such as classroom violence——50年代课堂暴力闻所未闻。'},
+      {q:'According to Elshtain, the current moral decline may be reversed ________.',opts:['if people can return to the "golden age"','when women and men enjoy equal rights','when people rid themselves of prejudice','if less emphasis is laid on material things'],ans:3,exp:'原文：Moral decline will not be reversed until... counter the materialism——弱化对物质的强调。'}
+    ]}
+];
+var READ_MAP={};READ_PRACTICE.forEach(function(x){READ_MAP[x.id]=x;});
+function answerReadQ(id,qi,oi){
+  if(!state.readPractice)state.readPractice={};
+  var p=READ_MAP[id];if(!p)return;
+  if(!state.readPractice[id])state.readPractice[id]=[];
+  if(state.readPractice[id][qi]!=null)return;
+  state.readPractice[id][qi]=oi;
+  save();refreshAll();
+}
+function renderReadPractice(){
+  var total=0,done=0,correct=0;
+  READ_PRACTICE.forEach(function(p){p.qs.forEach(function(q,qi){
+    total++;var r=state.readPractice&&state.readPractice[p.id]&&state.readPractice[p.id][qi];
+    if(r!=null){done++;if(r===q.ans)correct++;}
+  });});
+  var acc=done?Math.round(correct/done*100):0;
+  var cards=READ_PRACTICE.map(function(p){
+    var qs=p.qs.map(function(q,qi){
+      var r=state.readPractice&&state.readPractice[p.id]&&state.readPractice[p.id][qi];
+      var answered=r!=null;
+      var opts=q.opts.map(function(o,i){
+        var st='';
+        if(answered){
+          if(i===q.ans)st=' style="border-color:var(--green);background:#EAF7EE;color:#1c7a3e;font-weight:600"';
+          else if(i===r)st=' style="border-color:#d9534f;background:#fdecec;color:#b02a2a"';
+          else st=' style="opacity:.5"';
+        }
+        return '<button class="btn line block"'+st+(answered?' disabled':'')+' onclick="answerReadQ(\''+p.id+'\','+qi+','+i+')">'+esc(o)+'</button>';
+      }).join('');
+      var fb='';
+      if(answered){
+        fb=(r===q.ans?'<div class="muted" style="color:#1c7a3e;margin-top:6px">回答正确</div>':'<div class="muted" style="color:#b02a2a;margin-top:6px">回答错误，正确答案：'+esc(q.opts[q.ans])+'</div>')
+          +'<div class="muted" style="margin-top:6px">解析：'+esc(q.exp)+'</div>';
+      }
+      return '<div style="padding:10px 0;border-top:1px solid #eee">'+
+        '<div style="font-weight:600;margin-bottom:8px">'+esc(q.q)+'</div>'+
+        '<div style="display:flex;flex-direction:column;gap:8px">'+opts+'</div>'+fb+
+      '</div>';
+    }).join('');
+    return '<div style="margin-bottom:18px">'+
+      '<div style="font-weight:600;margin-bottom:6px">'+esc(p.title)+'</div>'+
+      '<div style="max-height:200px;overflow:auto;padding:10px 12px;background:#FBF7F1;border-radius:10px;font-size:13px;color:var(--ink-2);line-height:1.7;white-space:pre-wrap;margin-bottom:10px">'+esc(p.passage)+'</div>'+
+      qs+
+    '</div>';
+  }).join('');
+  return '<div class="card">'+
+    '<h3>'+icon('book',16)+'阅读理解真题训练<span class="sub">'+done+' / '+total+' 已做 · 正确率 '+acc+'%</span></h3>'+
+    '<div class="muted" style="margin-bottom:10px">选自 2002 年 1 月四级真题阅读。先读文章，再逐题作答，即时判分并看解析。</div>'+
+    cards+
+  '</div>';
+}
+
 function viewRead(){
   var list=(state.reading||[]).slice().sort(function(a,b){return a.date<b.date?1:-1;}).slice(0,30);
   var html=list.length?list.map(function(r){
@@ -2131,7 +2220,8 @@ function viewRead(){
   '</div>'+
   '<div class="card">'+
     '<h3>'+icon('book',16)+'我的精读<span class="sub">'+((state.reading||[]).length)+' 句</span></h3>'+html+
-  '</div>';
+  '</div>'+
+  renderReadPractice();
 }
 function addReading(){
   var s=$('#rSent')?($('#rSent').value||'').trim():'';
@@ -2145,16 +2235,16 @@ function delReading(id){state.reading=(state.reading||[]).filter(function(x){ret
 
 /* ---------------- 听力选择题（短对话）专项练习 ---------------- */
 var LISTEN_PRACTICE=[
-  {id:'lq1',script:"W: The movie starts at 7:30, but we should leave home at 7:00. M: OK, that gives us half an hour to get there.",q:'When will they leave home?',opts:['At 7:00','At 7:30','At 6:30','At 8:00'],ans:0,exp:'女士说 7:00 离家，留出半小时到影院。'},
-  {id:'lq2',script:"M: Would you like tea or coffee? W: Neither, thanks. I would like a glass of water.",q:'What does the woman want?',opts:['Tea','Coffee','Water','Juice'],ans:2,exp:'女士说都不要，要一杯水。'},
-  {id:'lq3',script:"W: I heard you got a new job. M: Yes, but I have to work on weekends now, which I do not like.",q:'What does the man say about the new job?',opts:['He enjoys the weekend work','He dislikes working on weekends','He has no job now','He will quit soon'],ans:1,exp:'男士说现在周末要上班，他不喜欢。'},
-  {id:'lq4',script:"M: How was the math exam? W: Terrible. I could not finish the last two questions.",q:'What does the woman mean?',opts:['She finished all questions','She found it easy','She did not finish the exam','She got full marks'],ans:2,exp:'女士说最后两题没做完，说明没写完。'},
-  {id:'lq5',script:"W: Shall we go by bus or take the subway? M: The subway is faster and cheaper. Let us take it.",q:'How will they travel?',opts:['By bus','By subway','By taxi','On foot'],ans:1,exp:'男士说地铁更快更便宜，决定坐地铁。'},
-  {id:'lq6',script:"M: Excuse me, what time does the library close? W: At 9 p.m. on weekdays, but at 5 p.m. on Sundays. M: Today is Sunday, so we have only two hours left.",q:'When does the library close today?',opts:['At 5 p.m.','At 9 p.m.','At 7 p.m.','At 8 p.m.'],ans:0,exp:'今天是周日，周日 5 点关门。'},
-  {id:'lq7',script:"W: I am tired. Let us stop for a break. M: All right, but we still have three kilometers to go.",q:'What will they probably do?',opts:['Stop and rest','Keep walking','Go back home','Take a taxi'],ans:0,exp:'女士提议休息，男士同意，所以会停下休息。'},
-  {id:'lq8',script:"M: The shirt was 50 dollars, and I bought two. W: So you spent 100 dollars in total.",q:'How much did the man spend?',opts:['50 dollars','100 dollars','150 dollars','25 dollars'],ans:1,exp:'50 美元一件，买两件，共 100 美元。'},
-  {id:'lq9',script:"W: Did you call Peter about the meeting? M: I tried, but his phone was off. I will send him an email instead.",q:'What will the man do?',opts:['Call Peter again','Send Peter an email','Go to Peter office','Cancel the meeting'],ans:1,exp:'男士说电话关机，改发邮件。'},
-  {id:'lq10',script:"M: The weather is nice today. Shall we go for a picnic? W: I would love to, but I have to finish my report this afternoon.",q:'Why can not the woman go?',opts:['She dislikes picnics','She must finish a report','It will rain','She is ill'],ans:1,exp:'女士说下午要写完报告，所以不能去。'}
+  {id:'lq1',script:"M: Jessica, could you forward this email to all the club members? W: Sorry, the computer broke down this morning. I will do it for you as soon as I have it fixed.",q:'What does the woman imply?',opts:['She has to post a letter instead.','She has to turn down the man\'s request.','She\'s not sure if the computer is fixed.','She can\'t send the message right now.'],ans:3,exp:'电脑今早坏了，修好前没法转发邮件，所以现在发不了。'},
+  {id:'lq2',script:"W: Did you find the book for your reading assignment in the library? M: It closed before I got there; I had no idea it closes so early on weekends.",q:'What does the man mean?',opts:['He didn\'t get the book he needed.','He had no idea where the book was.','The library is closed on weekends.','He was not allowed to check out the book.'],ans:0,exp:'图书馆在他到之前就关了，没借到需要的书。'},
+  {id:'lq3',script:"M: Did you check the power plug and press the play button? W: Yes. The power indicator was on and it was running. But somehow the sound didn\'t come through.",q:'What was the woman probably trying to do?',opts:['Play a tape recorder.','Take a picture.','Repair a typewriter.','Start a car.'],ans:0,exp:'按了播放键、电源灯亮但没声音，是在用录音机/播放器播放。'},
+  {id:'lq4',script:"M: Joanna, I am awfully sorry. I didn\'t mean to hurt you. Shall we have a beer and forget the whole thing? W: OK, we can drop it this time, but don\'t do it again!",q:'What do we learn from the conversation?',opts:['The woman rejected the man\'s apology.','The woman appreciated the man\'s offer.','The man had forgotten the whole thing.','The man had hurt the woman\'s feelings.'],ans:3,exp:'男士道歉说不是故意伤人，说明他伤了女士的感情。'},
+  {id:'lq5',script:"W: Airports are sad places. M: Sometimes, I guess. But we\'ll keep in touch and I\'ll fly over to see you at Christmas.",q:'What are the speakers doing?',opts:['The woman is meeting the man at the airport.','They are complaining about the poor airport service.','They are discussing their plan for Christmas.','The man is seeing the woman off.'],ans:3,exp:'在机场道别，男士说圣诞节飞过去看她——男士在送别女士。'},
+  {id:'lq6',script:"M: Are you going to return to your present job after the vacation? W: No, I plan to graduate next semester. That means I\'ll have to be a full-time student.",q:'What will the woman do?',opts:['She plans to go to graduate school.','She will drop out of school.','She will stop working and concentrate on her studies.','She will take a part-time job.'],ans:2,exp:'她打算下学期毕业，要做全职学生，即停工作专心学业。'},
+  {id:'lq7',script:"W: John, are you doing research for Professor Williams this semester? M: Actually, I\'m working as his teaching assistant.",q:'What does the man mean?',opts:['He needs another job as research assistant.','He asked Professor Williams for assistance.','He assists Professor Williams with his teaching.','He is doing research with Professor Williams.'],ans:2,exp:'他是教学助理，协助教授教学。'},
+  {id:'lq8',script:"M: I heard there are a few seats left for the show tonight. W: Really? I was under the impression that the tickets were sold out a long time ago.",q:'What do we know from the woman\'s reply?',opts:['She thought there were no tickets left for the show.','She thought the seats on the left side were fully occupied.','The show was planned a long time ago.','The audience were deeply impressed by the show.'],ans:0,exp:'女士说她印象中票早卖光了。'},
+  {id:'lq9',script:"W: Mr. Long\'s briefing seemed to go on forever. I was barely able to stay awake. M: How could you sleep through that? It was very important to the mission we\'re going to carry out.",q:'What does the man imply?',opts:['Mr. Long\'s briefing was unnecessarily long.','The woman should have been more attentive.','Mr. Long\'s briefing was not relevant to the mission.','The woman needn\'t have attended the briefing.'],ans:1,exp:'男士说那么重要的简报你居然能睡，暗示女士本该更专心。'},
+  {id:'lq10',script:"W: You seem very confident about the job interview, don\'t you? M: Yes, I feel ready for it! I bought a good suit in a clothing store; I had my hair cut; I have studied almost everything about finance and economies.",q:'Where is the man probably going to work?',opts:['In a bank.','In a school.','In a clothing store.','In a barbershop.'],ans:0,exp:'他学了金融经济、买西装，应是在银行面试。'}
 ];
 var LISTEN_MAP={};LISTEN_PRACTICE.forEach(function(x){LISTEN_MAP[x.id]=x;});
 function playListenQ(id){var it=LISTEN_MAP[id];if(it)playScript(it.script,id);}
