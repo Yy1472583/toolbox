@@ -645,6 +645,7 @@ table.struct-tbl td{color:var(--ink-2)}
       <div class="row" style="gap:8px">
         <div class="streak off" id="streakPill"></div>
         <div class="sync off" id="syncPill"><i></i><span>本地</span></div>
+        <div class="sync off" id="wsyncPill" style="display:none"><i></i><span>云同步</span></div>
       </div>
     </header>
     <nav class="tabbar" id="tabbar" aria-label="主导航"></nav>
@@ -784,7 +785,8 @@ var ICONS={
   award:'<circle cx="12" cy="9" r="6"/><path d="M8.5 14L7 22l5-3 5 3-1.5-8"/>',
   zap:'<path d="M13 2L4 14h6l-1 8 9-12h-6z"/>',
   star:'<path d="M12 3l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 18l-5.9 3 1.2-6.5L2.5 9.9 9.1 9z"/>',
-  edit:'<path d="M4 20h4l10-10-4-4L4 16z"/><path d="M14 6l4 4"/>'
+  edit:'<path d="M4 20h4l10-10-4-4L4 16z"/><path d="M14 6l4 4"/>',
+  cloud:'<path d="M7 18a4 4 0 0 1 .4-8 5.5 5.5 0 0 1 10.4 1.5A3.5 3.5 0 0 1 18 18z"/>'
 };
 
 /* ---------------- 工具 ---------------- */
@@ -864,8 +866,7 @@ function sampleState(){
     dictation:[],
     skillDone:{},
     sync:{},
-    meta:{sample:{practice:[],errors:[],vocab:[],words:[]},backupDismiss:0}
-  };
+    meta:{sample:{practice:[],errors:[],vocab:[],words:[]},backupDismiss:0,syncT:0}  };
   /* 示例：3 条刷题记录 */
   [[-5,'阅读',10,7],[-3,'听力',8,5],[-1,'翻译',2,1]].forEach(function(r){
     var id=uid();s.practice.push({id:id,date:addDays(t,r[0]),type:r[1],total:r[2],correct:r[3],note:'示例'});
@@ -900,7 +901,7 @@ function sampleState(){
 /* ---------------- 状态读写 ---------------- */
 function normalizeState(s){
   var d=sampleState();
-  var base={version:1,settings:{},wordProgress:{},dailyQueue:null,vocab:[],practice:[],errors:[],checkins:[],dayStats:{},planChecks:{},writing:[],reading:[],dictation:[],skillDone:{},sync:{},meta:{sample:{practice:[],errors:[],vocab:[],words:[]},backupDismiss:0}};
+  var base={version:1,settings:{},wordProgress:{},dailyQueue:null,vocab:[],practice:[],errors:[],checkins:[],dayStats:{},planChecks:{},writing:[],reading:[],dictation:[],skillDone:{},sync:{},meta:{sample:{practice:[],errors:[],vocab:[],words:[]},backupDismiss:0,syncT:0}};
   if(!s||typeof s!=='object')return d;
   var out=base;
   out.settings.dailyNew=clamp(parseInt((s.settings||{}).dailyNew,10)||10,1,50);
@@ -941,6 +942,7 @@ function normalizeState(s){
   }
   if(s.meta)out.meta.backupDismiss=parseInt(s.meta.backupDismiss,10)||0;
   if(s.meta&&s.meta.settingsT)out.meta.settingsT=parseInt(s.meta.settingsT,10)||0;
+  if(s.meta&&typeof s.meta.syncT==='number')out.meta.syncT=s.meta.syncT;
   return out;
 }
 function loadState(){
@@ -956,9 +958,11 @@ function loadState(){
   }
 }
 var state=loadState();
-function save(){
+function save(bump){
+  if(bump!==false)wsyncTouch();
   try{localStorage.setItem(KEY,JSON.stringify(state));}
   catch(e){toast('存储空间不足，请先在「我的」导出备份');}
+  if(bump!==false)wsyncPushSoon();
 }
 
 /* ================================================================
@@ -1129,6 +1133,152 @@ function renderSyncPill(){
 }
 
 /* ================================================================
+   网页云同步层（Cloudflare Workers + KV）—— 不依赖资料库，独立站也可用
+   口令 → SHA-256 派生 KV key + AES-GCM 密钥；进度整体加密存云端；
+   登录即拉取（远端更新则覆盖本地），之后每次本地改动防抖推云端；
+   每 45s 轮询一次，近实时跨设备同步。整体写入级 LWW（按时间戳）。
+   ================================================================ */
+var WSYNC={on:false,key:null,aes:null,hex:'',state:'off',last:0,pushing:false,timer:null,poll:null};
+function wsB64FromBytes(bytes){
+  var bin='',chunk=0x8000;
+  for(var i=0;i<bytes.length;i+=chunk)bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
+  return btoa(bin);
+}
+function wsBytesFromB64(b64){
+  var bin=atob(b64),out=new Uint8Array(bin.length);
+  for(var i=0;i<bin.length;i++)out[i]=bin.charCodeAt(i);
+  return out;
+}
+function wsHexToBytes(hex){
+  var out=new Uint8Array(hex.length/2);
+  for(var i=0;i<out.length;i++)out[i]=parseInt(hex.substr(i*2,2),16);
+  return out;
+}
+function wsDerive(pass){
+  return crypto.subtle.digest('SHA-256',new TextEncoder().encode(pass)).then(function(buf){
+    WSYNC.hex=[].map.call(new Uint8Array(buf),function(b){return ('0'+b.toString(16)).slice(-2);}).join('');
+    return crypto.subtle.importKey('raw',buf,{name:'AES-GCM'},false,['encrypt','decrypt']);
+  }).then(function(k){WSYNC.aes=k;});
+}
+function wsEncrypt(obj){
+  var iv=crypto.getRandomValues(new Uint8Array(12));
+  return crypto.subtle.encrypt({name:'AES-GCM',iv:iv},WSYNC.aes,new TextEncoder().encode(JSON.stringify(obj))).then(function(ct){
+    return {iv:wsB64FromBytes(iv),data:wsB64FromBytes(new Uint8Array(ct))};
+  });
+}
+function wsDecrypt(bundle){
+  var iv=wsBytesFromB64(bundle.iv),ct=wsBytesFromB64(bundle.data);
+  return crypto.subtle.decrypt({name:'AES-GCM',iv:iv},WSYNC.aes,ct).then(function(pt){return JSON.parse(new TextDecoder().decode(pt));});
+}
+function wsApi(){return location.origin+'/api/sync';}
+function wsyncTouch(){
+  if(!WSYNC||!WSYNC.on)return;
+  var n=Date.now();
+  if(n>(state.meta.syncT||0))state.meta.syncT=n;
+}
+function wsyncPushSoon(){
+  if(!WSYNC||!WSYNC.on||WSYNC.pushing)return;
+  if(WSYNC.timer)clearTimeout(WSYNC.timer);
+  WSYNC.timer=setTimeout(wsyncPush,800);
+}
+function wsyncPush(){
+  if(!WSYNC||!WSYNC.on||WSYNC.pushing)return;
+  WSYNC.pushing=true;WSYNC.state='ing';wsRenderSync();
+  wsEncrypt({__t:state.meta.syncT||0,state:state}).then(function(bundle){
+    return fetch(wsApi(),{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({k:WSYNC.hex,iv:bundle.iv,data:bundle.data,t:state.meta.syncT||0})});
+  }).then(function(r){return r.json();}).then(function(j){
+    WSYNC.pushing=false;WSYNC.state=(j&&j.ok)?'ok':'err';WSYNC.last=Date.now();wsRenderSync();
+    if(WSYNC.state==='err')toast('云端同步失败，稍后自动重试');
+  }).catch(function(){
+    WSYNC.pushing=false;WSYNC.state='err';wsRenderSync();
+  });
+}
+function wsyncPull(cb){
+  if(!WSYNC||!WSYNC.on){if(cb)cb(false);return;}
+  fetch(wsApi()+'?k='+encodeURIComponent(WSYNC.hex)).then(function(r){
+    if(r.status===404){if(cb)cb(false);return null;}
+    if(!r.ok){if(cb)cb(false);return null;}
+    return r.json();
+  }).then(function(j){
+    if(!j)return;
+    wsDecrypt(j).then(function(payload){
+      var remoteT=j.t||0;
+      if(remoteT>(state.meta.syncT||0)){
+        var ns=payload.state;
+        if(ns&&typeof ns==='object'){
+          Object.keys(state).forEach(function(k){delete state[k];});
+          Object.assign(state,ns);
+          state.meta=state.meta||{};state.meta.syncT=remoteT;
+          save(false);
+          refreshAll();
+          if(cb)cb(true);
+        } else {if(cb)cb(false);}
+      } else {if(cb)cb(false);}
+    }).catch(function(){if(cb)cb(false);});
+  }).catch(function(){if(cb)cb(false);});
+}
+function wsyncLogin(pass){
+  if(!pass){toast('请输入同步口令');return;}
+  if(!crypto||!crypto.subtle){toast('当前浏览器不支持加密同步');return;}
+  WSYNC.state='ing';wsRenderSync();
+  wsDerive(pass).then(function(){
+    try{sessionStorage.setItem('wsync_k',WSYNC.hex);}catch(e){}
+    WSYNC.on=true;
+    wsyncPull(function(adopted){
+      wsyncPush();
+      WSYNC.state='ok';WSYNC.last=Date.now();
+      wsRenderSync();renderWebSync();
+      wsStartPoll();
+      toast(adopted?'已从云端恢复进度':'已登录，进度已备份到云端');
+    });
+  }).catch(function(){WSYNC.state='err';wsRenderSync();toast('派生密钥失败');});
+}
+function wsyncLogout(){
+  WSYNC.on=false;WSYNC.key=null;WSYNC.aes=null;WSYNC.hex='';WSYNC.state='off';
+  try{sessionStorage.removeItem('wsync_k');}catch(e){}
+  wsStopPoll();renderWebSync();toast('已退出网页云同步');
+}
+function wsyncAuto(){
+  if(ONLINE)return; /* 资料库页用自己的同步 */
+  var hex=null;try{hex=sessionStorage.getItem('wsync_k');}catch(e){}
+  if(!hex){renderWebSync();return;}
+  WSYNC.hex=hex;WSYNC.on=true;WSYNC.state='ing';wsRenderSync();
+  crypto.subtle.importKey('raw',wsHexToBytes(hex),{name:'AES-GCM'},false,['encrypt','decrypt']).then(function(k){
+    WSYNC.aes=k;
+    wsyncPull(function(adopted){WSYNC.state='ok';WSYNC.last=Date.now();wsRenderSync();renderWebSync();wsStartPoll();});
+  }).catch(function(){WSYNC.on=false;WSYNC.state='off';wsRenderSync();renderWebSync();});
+}
+function wsStartPoll(){wsStopPoll();WSYNC.poll=setInterval(function(){wsyncPull(function(){});},45000);}
+function wsStopPoll(){if(WSYNC.poll){clearInterval(WSYNC.poll);WSYNC.poll=null;}}
+function wsRenderSync(){
+  var el=document.getElementById('wsyncState');
+  if(el)el.textContent=WSYNC.state==='ok'?'已同步':(WSYNC.state==='ing'?'同步中':(WSYNC.state==='err'?'同步失败':'未登录'));
+  var p=document.getElementById('wsyncPill');
+  if(p){
+    if(WSYNC.on){
+      p.style.display='';
+      p.className='sync '+(WSYNC.state==='ok'?'ok':(WSYNC.state==='ing'?'ing':'off'));
+      p.querySelector('span').textContent=(WSYNC.state==='ok'?'云同步':(WSYNC.state==='ing'?'同步中':'同步失败'));
+    } else p.style.display='none';
+  }
+}
+function renderWebSync(){
+  var area=document.getElementById('wsyncArea');if(!area)return;
+  if(!WSYNC.on){
+    area.innerHTML='<div class="field"><input type="password" id="wsyncPass" placeholder="设置或输入同步口令" autocomplete="new-password"></div>'+
+      '<button class="btn block" onclick="wsyncLogin(document.getElementById(\'wsyncPass\').value)">'+icon('cloud',15)+'登录并同步</button>'+
+      '<div class="muted" style="margin-top:8px">口令即账号，请牢记；换设备用同一口令即可恢复进度。服务端只存 AES 加密密文，忘记无法找回。</div>';
+  } else {
+    var last=WSYNC.last?new Date(WSYNC.last).toLocaleString():'—';
+    area.innerHTML='<div class="muted" style="margin-bottom:10px">已登录，进度加密同步中。上次：'+esc(last)+'</div>'+
+      '<div class="me-list">'+
+      '<button class="btn line block" onclick="wsyncPush()">'+icon('refresh',15)+'立即同步</button>'+
+      '<button class="btn ghost block" onclick="wsyncLogout()">退出登录</button>'+
+      '</div>';
+  }
+}
+
+/* ================================================================
    计算层（只读 state，不改 DOM）
    ================================================================ */
 function ensureQueue(t){
@@ -1258,7 +1408,7 @@ function renderMain(){
   else if(curTab==='read')m.innerHTML=viewRead();
   else if(curTab==='skill')m.innerHTML=viewSkill();
   else m.innerHTML=viewMe();
-  if(curTab==='me'){renderSyncTable();}
+  if(curTab==='me'){ if(ONLINE)renderSyncTable(); else renderWebSync(); }
 }
 function renderTabbar(){
   var el=$('#tabbar');if(!el)return;
@@ -1275,6 +1425,7 @@ function renderHeader(){
   }
   var sub=$('#brandSub');
   if(sub)sub.textContent='距考试 '+countdown()+' 天 · 词库 '+overview().learned+'/'+WORDS.length;
+  wsRenderSync();
 }
 function ringSVG(done,total){
   var pct=total?done/total:0;
@@ -1621,6 +1772,20 @@ function viewMe(){
       '</div>'+
     '</div>'+
     '<div class="sub">'+
+    (ONLINE?
+      '<div class="card">'+
+        '<h3>'+icon('refresh',16)+'云端同步<span class="sub" id="syncState">—</span></h3>'+
+        '<div class="muted" style="margin-bottom:10px">数据保存在资料库数据表「四级备考数据」中，换设备打开同一页面自动拉取；断网时先写本地，恢复后自动补传。</div>'+
+        '<button class="btn ghost block" onclick="manualSync()">'+icon('refresh',15)+'立即同步</button>'+
+        '<div class="sync-box" style="margin-top:12px" id="syncBox"></div>'+
+      '</div>'
+    :
+      '<div class="card">'+
+        '<h3>'+icon('cloud',16)+'网页云同步<span class="sub" id="wsyncState">—</span></h3>'+
+        '<div class="muted" style="margin-bottom:10px">用口令把进度加密存到云端（Cloudflare Workers+KV），换手机/电脑登录同一口令即自动同步。服务端只存 AES 加密密文。</div>'+
+        '<div id="wsyncArea"></div>'+
+      '</div>'
+    )+
       '<div class="card">'+
         '<h3>'+icon('alert',16)+'数据维护</h3>'+
         '<div class="me-list">'+
@@ -2418,6 +2583,7 @@ document.addEventListener('DOMContentLoaded',function(){
   renderSyncPill();
   refreshAll();
   if(ONLINE)dbInit();else{SYNC_MODE='off';renderSyncPill();}
+  if(!ONLINE)wsyncAuto();
   $('#modalMask').addEventListener('click',function(e){if(e.target===this)closeModal();});
   $('#posterMask').addEventListener('click',function(e){if(e.target===this)closePoster();});
   document.addEventListener('keydown',function(e){
