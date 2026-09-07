@@ -2053,16 +2053,26 @@ function togglePlan(key){
   refreshAll();
 }
 /* ---------------- 视图：写译 ---------------- */
+/* 写作真题题库：全部为历年四级作文真题 Directions（原文），严禁自编 */
 var WRITE_PROMPTS=[
-  {t:'短视频现象的利弊',hint:'120–180 词，三段式：引入+立场 / 两面论证 / 总结+建议'},
-  {t:'Online learning 的利弊',hint:'约 145 词，先优后劣，结尾给建议'},
-  {t:'大学生是否该做兼职',hint:'120–180 词，立场明确，论据具体'}
+  {id:'w201712',exam:'2017年12月（卷一）',title:'How to best handle the relationship between parents and children',
+   dir:'Directions: For this part, you are allowed 30 minutes to write a short essay on how to best handle the relationship between parents and children. You should write at least 120 words but no more than 180 words.'},
+  {id:'w201706',exam:'2017年6月（卷一）',title:'A Second-hand Bicycle for Sale',
+   dir:'Directions: For this part, you are allowed 30 minutes to write an advertisement on your campus website to sell a bicycle you used at college. Your advertisement may include its brand, specifications/features, condition and price, and your contact information. You should write at least 120 words but no more than 180 words.'},
+  {id:'w201312',exam:'2013年12月（卷一）',title:'My View on the “Campus Star” Contest',
+   dir:'Directions: For this part, you are allowed 30 minutes to write a short essay entitled My View on the “Campus Star” Contest. You should write 120 words following the outline given below: 1. 校园里也涌现出了各种选“星”比赛 2. 这种现象带来的问题 3. 你的看法'},
+  {id:'w200501',exam:'2005年1月（A卷）',title:'A Campaign Speech',
+   dir:'Directions: For this part, you are allowed 30 minutes to write a Campaign Speech. You should write at least 120 words and base your composition on the outline given in Chinese below: 1. 你认为自己具备了什么条件（能力、性格、爱好等）可以胜任学生会主席的工作 2. 如果当选，你将为本校同学做些什么'},
+  {id:'w200406',exam:'2004年6月（A卷）',title:'A Brief Introduction to a Tourist Attraction',
+   dir:'Directions: For this part, you are allowed 30 minutes to write a composition entitled A Brief Introduction to a Tourist Attraction. You should write at least 120 words according to the following guidelines: Your role: a tour guide; Your audience: a group of foreign tourists; Your introduction should include: some welcoming words, the schedule for the day, a description of the place the tourists will be visiting (e.g. a scenic spot or a historical site, etc.). You should make the introduction interesting and the arrangements for the day clear to everybody.'},
+  {id:'w200312',exam:'2003年12月',title:'A Letter in Reply to a Friend',
+   dir:'Directions: For this part, you are allowed 30 minutes to write a letter in reply to a friend’s inquiry about applying for admission to your college or university. You should write at least 120 words according to the outline given below in Chinese: 1. 建议报考的专业及理由 2. 报考该专业的基本条件 3. 应当如何备考'}
 ];
 function viewWrite(){
   var tp=WRITE_PROMPTS.map(function(p){
-    return '<div class="wl-prompt"><div class="grow"><b>'+esc(p.t)+'</b><span class="muted">'+esc(p.hint)+'</span></div>'+
-      (canSpeak()?'<button class="speak" onclick="speak(\''+esc(p.t)+'\',\'zh-CN\')" aria-label="朗读题目">'+icon('vol',16)+'</button>':'')+
-      '<button class="btn sm line" onclick="fillWrite(\''+esc(p.t)+'\')">去写</button></div>';
+    return '<div class="wl-prompt"><div class="grow"><div class="row" style="gap:7px;align-items:center;flex-wrap:wrap"><span class="badge orange">'+esc(p.exam)+'</span><b>'+esc(p.title)+'</b></div>'+
+      '<div class="muted" style="border-left:3px solid var(--line-soft);padding-left:8px;margin-top:4px;white-space:pre-wrap">'+esc(p.dir)+'</div></div>'+
+      '<button class="btn sm line" onclick="fillWrite(\''+esc(p.exam+' · '+p.title)+'\')">去写</button></div>';
   }).join('');
   var list=(state.writing||[]).slice().sort(function(a,b){return a.date<b.date?1:-1;}).slice(0,30);
   var html=list.length?list.map(function(w){
@@ -2083,12 +2093,13 @@ function viewWrite(){
     '<div class="muted" style="line-height:1.7">① 首段：引入话题 + 亮明立场（≈35 词）<br>② 中段：两面论证，先优后劣，各给 1 例（≈80 词）<br>③ 尾段：总结 + 建议/展望（≈35 词）<br>目标 150 词左右，不超 180；别用缩写、注意时态、必须有从句、要有明确观点。</div>'+
   '</div>'+
   '<div class="card">'+
-    '<h3>'+icon('target',16)+'写作题目<span class="sub">点朗读听题，点去写填到下方</span></h3>'+tp+
+    '<h3>'+icon('target',16)+'写作真题题库<span class="sub">历年四级作文 Directions（原文）</span></h3>'+tp+
+    '<div class="muted" style="margin-top:8px">选一题点「去写」填到下方，写完粘进内容框、保存并标「已批改」，丢我逐句批改（重点扣：缩写 / 时态 / 缺从句 / 无观点）。</div>'+
   '</div>'+
   '<div class="card">'+
     '<h3>'+icon('plus',16)+'记一篇写译</h3>'+
     '<div class="form-grid"><div class="field"><label for="wType">类型</label><select id="wType"><option>写作</option><option>翻译</option></select></div>'+
-    '<div class="field"><label for="wTopic">题目 / 话题</label><input type="text" id="wTopic" placeholder="例如：短视频现象的利弊"></div></div>'+
+    '<div class="field"><label for="wTopic">题目 / 话题</label><input type="text" id="wTopic" placeholder="例如：2017年12月 亲子关系"></div></div>'+
     '<div class="field"><label for="wText">内容（英文作文或中文待译段落）</label><textarea id="wText" placeholder="把写好的内容粘这里"></textarea></div>'+
     '<button class="btn block" onclick="addWriting()">'+icon('plus',15)+'保存</button>'+
   '</div>'+
