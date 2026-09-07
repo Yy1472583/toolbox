@@ -1217,12 +1217,14 @@ function wsyncPull(cb){
     }).catch(function(){if(cb)cb(false);});
   }).catch(function(){if(cb)cb(false);});
 }
-function wsyncLogin(pass){
+function wsyncLogin(pass,remember){
   if(!pass){toast('请输入同步口令');return;}
   if(!crypto||!crypto.subtle){toast('当前浏览器不支持加密同步');return;}
   WSYNC.state='ing';wsRenderSync();
   wsDerive(pass).then(function(){
     try{sessionStorage.setItem('wsync_k',WSYNC.hex);}catch(e){}
+    if(remember){try{localStorage.setItem('wsync_k',WSYNC.hex);}catch(e){}}
+    else{try{localStorage.removeItem('wsync_k');}catch(e){}}   /* 取消记住则清持久 key */
     WSYNC.on=true;
     wsyncPull(function(adopted){
       wsyncPush();
@@ -1236,11 +1238,14 @@ function wsyncLogin(pass){
 function wsyncLogout(){
   WSYNC.on=false;WSYNC.key=null;WSYNC.aes=null;WSYNC.hex='';WSYNC.state='off';
   try{sessionStorage.removeItem('wsync_k');}catch(e){}
+  try{localStorage.removeItem('wsync_k');}catch(e){}   /* 同时清持久口令 */
   wsStopPoll();renderWebSync();toast('已退出网页云同步');
 }
 function wsyncAuto(){
   if(ONLINE)return; /* 资料库页用自己的同步 */
-  var hex=null;try{hex=sessionStorage.getItem('wsync_k');}catch(e){}
+  var hex=null;
+  try{hex=localStorage.getItem('wsync_k');}catch(e){}      /* 记住口令：本机持久 */
+  if(!hex){try{hex=sessionStorage.getItem('wsync_k');}catch(e){}} /* 回退会话级 */
   if(!hex){renderWebSync();return;}
   WSYNC.hex=hex;WSYNC.on=true;WSYNC.state='ing';wsRenderSync();
   crypto.subtle.importKey('raw',wsHexToBytes(hex),{name:'AES-GCM'},false,['encrypt','decrypt']).then(function(k){
@@ -1266,8 +1271,9 @@ function renderWebSync(){
   var area=document.getElementById('wsyncArea');if(!area)return;
   if(!WSYNC.on){
     area.innerHTML='<div class="field"><input type="password" id="wsyncPass" placeholder="设置或输入同步口令" autocomplete="new-password"></div>'+
-      '<button class="btn block" onclick="wsyncLogin(document.getElementById(\'wsyncPass\').value)">'+icon('cloud',15)+'登录并同步</button>'+
-      '<div class="muted" style="margin-top:8px">口令即账号，请牢记；换设备用同一口令即可恢复进度。服务端只存 AES 加密密文，忘记无法找回。</div>';
+      '<label class="muted" style="display:flex;align-items:center;gap:6px;margin:10px 0;font-size:13px;cursor:pointer"><input type="checkbox" id="wsyncRemember" checked style="width:16px;height:16px"> 记住口令（本机自动登录，重启免输入）</label>'+
+      '<button class="btn block" onclick="wsyncLogin(document.getElementById(\'wsyncPass\').value, document.getElementById(\'wsyncRemember\').checked)">'+icon('cloud',15)+'登录并同步</button>'+
+      '<div class="muted" style="margin-top:8px">口令即账号；换设备用同一口令即可恢复进度。服务端只存 AES 加密密文，忘记无法找回。</div>';
   } else {
     var last=WSYNC.last?new Date(WSYNC.last).toLocaleString():'—';
     area.innerHTML='<div class="muted" style="margin-bottom:10px">已登录，进度加密同步中。上次：'+esc(last)+'</div>'+
