@@ -864,6 +864,7 @@ function sampleState(){
     writing:[],
     reading:[],
     dictation:[],
+    listenPractice:{},
     skillDone:{},
     sync:{},
     meta:{sample:{practice:[],errors:[],vocab:[],words:[]},backupDismiss:0,syncT:0}  };
@@ -901,7 +902,7 @@ function sampleState(){
 /* ---------------- 状态读写 ---------------- */
 function normalizeState(s){
   var d=sampleState();
-  var base={version:1,settings:{},wordProgress:{},dailyQueue:null,vocab:[],practice:[],errors:[],checkins:[],dayStats:{},planChecks:{},writing:[],reading:[],dictation:[],skillDone:{},sync:{},meta:{sample:{practice:[],errors:[],vocab:[],words:[]},backupDismiss:0,syncT:0}};
+  var base={version:1,settings:{},wordProgress:{},dailyQueue:null,vocab:[],practice:[],errors:[],checkins:[],dayStats:{},planChecks:{},writing:[],reading:[],dictation:[],listenPractice:{},skillDone:{},sync:{},meta:{sample:{practice:[],errors:[],vocab:[],words:[]},backupDismiss:0,syncT:0}};
   if(!s||typeof s!=='object')return d;
   var out=base;
   out.settings.dailyNew=clamp(parseInt((s.settings||{}).dailyNew,10)||10,1,50);
@@ -935,6 +936,7 @@ function normalizeState(s){
   if(Array.isArray(s.writing))out.writing=s.writing.filter(function(x){return x&&x.id;}).map(function(x){return {id:x.id||uid(),date:String(x.date||todayStr()).slice(0,10),type:x.type==='翻译'?'翻译':'写作',topic:x.topic||'',text:x.text||'',graded:!!x.graded};});
   if(Array.isArray(s.reading))out.reading=s.reading.filter(function(x){return x&&x.id;}).map(function(x){return {id:x.id||uid(),date:String(x.date||todayStr()).slice(0,10),sentence:x.sentence||'',analysis:x.analysis||''};});
   if(Array.isArray(s.dictation))out.dictation=s.dictation.filter(function(x){return x&&x.id;}).map(function(x){return {id:x.id||uid(),date:String(x.date||todayStr()).slice(0,10),text:x.text||''};});
+  if(s.listenPractice&&typeof s.listenPractice==='object'){out.listenPractice={};Object.keys(s.listenPractice).forEach(function(k){var r=s.listenPractice[k];if(r)out.listenPractice[k]={picked:r.picked==null?null:parseInt(r.picked,10),correct:!!r.correct,_t:r._t||0};});}
   if(s.skillDone&&typeof s.skillDone==='object'){out.skillDone={};Object.keys(s.skillDone).forEach(function(k){out.skillDone[k]=!!s.skillDone[k];});}
   if(s.sync&&typeof s.sync==='object')out.sync=s.sync;
   if(s.meta&&s.meta.sample){
@@ -2141,6 +2143,63 @@ function addReading(){
 }
 function delReading(id){state.reading=(state.reading||[]).filter(function(x){return x.id!==id;});save();refreshAll();}
 
+/* ---------------- 听力选择题（短对话）专项练习 ---------------- */
+var LISTEN_PRACTICE=[
+  {id:'lq1',script:"W: The movie starts at 7:30, but we should leave home at 7:00. M: OK, that gives us half an hour to get there.",q:'When will they leave home?',opts:['At 7:00','At 7:30','At 6:30','At 8:00'],ans:0,exp:'女士说 7:00 离家，留出半小时到影院。'},
+  {id:'lq2',script:"M: Would you like tea or coffee? W: Neither, thanks. I would like a glass of water.",q:'What does the woman want?',opts:['Tea','Coffee','Water','Juice'],ans:2,exp:'女士说都不要，要一杯水。'},
+  {id:'lq3',script:"W: I heard you got a new job. M: Yes, but I have to work on weekends now, which I do not like.",q:'What does the man say about the new job?',opts:['He enjoys the weekend work','He dislikes working on weekends','He has no job now','He will quit soon'],ans:1,exp:'男士说现在周末要上班，他不喜欢。'},
+  {id:'lq4',script:"M: How was the math exam? W: Terrible. I could not finish the last two questions.",q:'What does the woman mean?',opts:['She finished all questions','She found it easy','She did not finish the exam','She got full marks'],ans:2,exp:'女士说最后两题没做完，说明没写完。'},
+  {id:'lq5',script:"W: Shall we go by bus or take the subway? M: The subway is faster and cheaper. Let us take it.",q:'How will they travel?',opts:['By bus','By subway','By taxi','On foot'],ans:1,exp:'男士说地铁更快更便宜，决定坐地铁。'},
+  {id:'lq6',script:"M: Excuse me, what time does the library close? W: At 9 p.m. on weekdays, but at 5 p.m. on Sundays. M: Today is Sunday, so we have only two hours left.",q:'When does the library close today?',opts:['At 5 p.m.','At 9 p.m.','At 7 p.m.','At 8 p.m.'],ans:0,exp:'今天是周日，周日 5 点关门。'},
+  {id:'lq7',script:"W: I am tired. Let us stop for a break. M: All right, but we still have three kilometers to go.",q:'What will they probably do?',opts:['Stop and rest','Keep walking','Go back home','Take a taxi'],ans:0,exp:'女士提议休息，男士同意，所以会停下休息。'},
+  {id:'lq8',script:"M: The shirt was 50 dollars, and I bought two. W: So you spent 100 dollars in total.",q:'How much did the man spend?',opts:['50 dollars','100 dollars','150 dollars','25 dollars'],ans:1,exp:'50 美元一件，买两件，共 100 美元。'},
+  {id:'lq9',script:"W: Did you call Peter about the meeting? M: I tried, but his phone was off. I will send him an email instead.",q:'What will the man do?',opts:['Call Peter again','Send Peter an email','Go to Peter office','Cancel the meeting'],ans:1,exp:'男士说电话关机，改发邮件。'},
+  {id:'lq10',script:"M: The weather is nice today. Shall we go for a picnic? W: I would love to, but I have to finish my report this afternoon.",q:'Why can not the woman go?',opts:['She dislikes picnics','She must finish a report','It will rain','She is ill'],ans:1,exp:'女士说下午要写完报告，所以不能去。'}
+];
+var LISTEN_MAP={};LISTEN_PRACTICE.forEach(function(x){LISTEN_MAP[x.id]=x;});
+function playListenQ(id){var it=LISTEN_MAP[id];if(it)playScript(it.script,id);}
+function answerListenQ(id,idx){
+  if(!state.listenPractice)state.listenPractice={};
+  var it=LISTEN_MAP[id];if(!it)return;
+  var prev=state.listenPractice[id];
+  if(prev&&prev.picked!=null)return;
+  state.listenPractice[id]={picked:idx,correct:(idx===it.ans),_t:Date.now()};
+  save();refreshAll();
+}
+function renderListenPractice(){
+  var total=LISTEN_PRACTICE.length,done=0,correct=0;
+  LISTEN_PRACTICE.forEach(function(it){var r=state.listenPractice&&state.listenPractice[it.id];if(r&&r.picked!=null){done++;if(r.correct)correct++;}});
+  var acc=done?Math.round(correct/done*100):0;
+  var items=LISTEN_PRACTICE.map(function(it){
+    var r=state.listenPractice&&state.listenPractice[it.id];
+    var answered=r&&r.picked!=null;
+    var opts=it.opts.map(function(o,i){
+      var st='';
+      if(answered){
+        if(i===it.ans)st=' style="border-color:var(--green);background:#EAF7EE;color:#1c7a3e;font-weight:600"';
+        else if(i===r.picked)st=' style="border-color:#d9534f;background:#fdecec;color:#b02a2a"';
+        else st=' style="opacity:.5"';
+      }
+      return '<button class="btn line block"'+st+(answered?' disabled':'')+' onclick="answerListenQ(\''+it.id+'\','+i+')">'+esc(o)+'</button>';
+    }).join('');
+    var fb='';
+    if(answered){
+      fb=(r.correct?'<div class="muted" style="color:#1c7a3e;margin-top:8px">回答正确</div>':'<div class="muted" style="color:#b02a2a;margin-top:8px">回答错误，正确答案：'+esc(it.opts[it.ans])+'</div>')
+        +'<div class="muted" style="margin-top:6px">解析：'+esc(it.exp)+'</div>'
+        +'<div class="muted" style="margin-top:6px">原文：'+esc(it.script)+'</div>';
+    }
+    return '<div style="padding:12px 0;border-top:1px solid #eee">'+
+      '<div class="row" style="gap:8px;align-items:center;margin-bottom:8px"><button class="btn" onclick="playListenQ(\''+it.id+'\')">'+icon('play',15)+' 播放</button><div style="font-weight:600">'+esc(it.q)+'</div></div>'+
+      '<div style="display:flex;flex-direction:column;gap:8px">'+opts+'</div>'+fb+
+    '</div>';
+  }).join('');
+  return '<div class="card">'+
+    '<h3>'+icon('vol',16)+'听力选择题（短对话）<span class="sub">'+done+' / '+total+' 已做 · 正确率 '+acc+'%</span></h3>'+
+    '<div class="muted" style="margin-bottom:6px">点击播放听对话（浏览器朗读），选出正确答案，即时判分并看解析、原文。</div>'+
+    items+
+  '</div>';
+}
+
 /* ---------------- 视图：听力专项 ---------------- */
 function viewListen(){
   var tips=[
@@ -2166,7 +2225,8 @@ function viewListen(){
   '<div class="card">'+
     '<h3>'+icon('target',16)+'听力解题技巧</h3>'+
     '<ul class="plan-focus">'+tipHTML+'</ul>'+
-  '</div>';
+  '</div>'+
+  renderListenPractice();
 }
 function playDictation(){var el=$('#dText');if(el&&el.value.trim())playScript(el.value,'dict');}
 function toggleDictShow(){var el=$('#dText'),box=$('#dShow');if(!box)return;if(box.style.display==='none'){box.textContent=el?el.value:'';box.style.display='block';}else{box.style.display='none';}}
