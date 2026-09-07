@@ -154,6 +154,22 @@ header{display:flex;align-items:center;justify-content:space-between;padding:18p
 .task-line.done .box{background:var(--green);border-color:var(--green);color:#fff}
 .task-line.done span:last-child{color:var(--muted);text-decoration:line-through;text-decoration-color:#CBD5E1}
 
+/* ============== 复习计划 ============== */
+.plan-card .pp-bar{display:flex;gap:6px;margin:2px 0 14px}
+.pp-seg{flex:1;min-width:0}
+.pp-track{height:10px;border-radius:6px;background:#EFEAE0;overflow:hidden}
+.pp-fill{height:100%;border-radius:6px;transition:width .3s ease}
+.pp-cap{display:flex;align-items:center;gap:5px;margin-top:8px;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pp-cap b{display:inline-flex;width:18px;height:18px;border-radius:50%;background:#EFEAE0;color:var(--ink-2);align-items:center;justify-content:center;font-size:11px;font-weight:700;flex:none}
+.pp-cap.on{color:var(--orange);font-weight:700}
+.pp-cap.on b{background:var(--orange);color:#fff}
+.pp-now{font-size:13px;color:var(--ink-2);background:#FBF7F1;border-radius:10px;padding:10px 12px;margin-bottom:2px;line-height:1.6}
+.pp-now b{color:var(--ink);font-weight:700}
+.plan-focus{list-style:none;display:flex;flex-direction:column;gap:9px;margin-top:2px}
+.plan-focus li{position:relative;padding-left:18px;font-size:13.5px;line-height:1.55;color:var(--ink-2)}
+.plan-focus li::before{content:'';position:absolute;left:4px;top:8px;width:6px;height:6px;border-radius:50%;background:var(--orange)}
+.auto{font-style:normal;font-size:10.5px;font-weight:700;color:var(--green);background:var(--green-soft);border-radius:5px;padding:1px 6px;margin-left:6px;vertical-align:middle}
+
 /* ============== 环形进度 ============== */
 .ring-wrap{display:flex;align-items:center;gap:16px}
 .ring{position:relative;width:96px;height:96px;flex:none}
@@ -726,7 +742,7 @@ var ERR_INTERVALS=[1,3,7,15,30];
 var TYPES=['听力','阅读','写作','翻译'];
 var REASONS=['词汇不认识','语法不熟','理解偏差','粗心失误','时间不够','其他','题库答错'];
 var TAGCLS={'听力':'listening','阅读':'reading','写作':'writing','翻译':'translating'};
-var TABS=[{id:'today',name:'今日',ic:'today'},{id:'quiz',name:'刷题',ic:'chart'},{id:'book',name:'错本',ic:'book'},{id:'bank',name:'真题',ic:'bank'},{id:'me',name:'我的',ic:'user'}];
+var TABS=[{id:'today',name:'今日',ic:'today'},{id:'quiz',name:'刷题',ic:'chart'},{id:'book',name:'错本',ic:'book'},{id:'bank',name:'真题',ic:'bank'},{id:'plan',name:'计划',ic:'target'},{id:'me',name:'我的',ic:'user'}];
 var ICONS={
   today:'<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',
   chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
@@ -839,6 +855,7 @@ function sampleState(){
     errors:[],
     checkins:[],
     dayStats:{},
+    planChecks:{},
     sync:{},
     meta:{sample:{practice:[],errors:[],vocab:[],words:[]},backupDismiss:0}
   };
@@ -876,7 +893,7 @@ function sampleState(){
 /* ---------------- 状态读写 ---------------- */
 function normalizeState(s){
   var d=sampleState();
-  var base={version:1,settings:{},wordProgress:{},dailyQueue:null,vocab:[],practice:[],errors:[],checkins:[],dayStats:{},sync:{},meta:{sample:{practice:[],errors:[],vocab:[],words:[]},backupDismiss:0}};
+  var base={version:1,settings:{},wordProgress:{},dailyQueue:null,vocab:[],practice:[],errors:[],checkins:[],dayStats:{},planChecks:{},sync:{},meta:{sample:{practice:[],errors:[],vocab:[],words:[]},backupDismiss:0}};
   if(!s||typeof s!=='object')return d;
   var out=base;
   out.settings.dailyNew=clamp(parseInt((s.settings||{}).dailyNew,10)||10,1,50);
@@ -906,6 +923,7 @@ function normalizeState(s){
   });
   if(Array.isArray(s.checkins))out.checkins=s.checkins.map(function(x){return String(x).slice(0,10);});
   if(s.dayStats&&typeof s.dayStats==='object')Object.keys(s.dayStats).forEach(function(k){out.dayStats[String(k).slice(0,10)]=parseInt(s.dayStats[k],10)||0;});
+  if(s.planChecks&&typeof s.planChecks==='object'){out.planChecks={};Object.keys(s.planChecks).forEach(function(k){out.planChecks[String(k).slice(0,10)]=s.planChecks[k]||{};});}
   if(s.sync&&typeof s.sync==='object')out.sync=s.sync;
   if(s.meta&&s.meta.sample){
     ['practice','errors','vocab','words'].forEach(function(k){if(Array.isArray(s.meta.sample[k]))out.meta.sample[k]=s.meta.sample[k];});
@@ -1223,6 +1241,7 @@ function renderMain(){
   else if(curTab==='quiz')m.innerHTML=viewQuiz();
   else if(curTab==='book')m.innerHTML=viewBook();
   else if(curTab==='bank')m.innerHTML=viewBank();
+  else if(curTab==='plan')m.innerHTML=viewPlan();
   else m.innerHTML=viewMe();
   if(curTab==='me'){renderSyncTable();}
 }
@@ -1764,6 +1783,85 @@ function celebrate(){
 /* ================================================================
    事件处理（改数据 → save → refreshAll）
    ================================================================ */
+/* ---------------- 视图：复习计划 ---------------- */
+var PLAN={
+  start:'2026-09-07',
+  phases:[
+    {key:'base',name:'基础夯实',start:'2026-09-07',end:'2026-10-04',
+     sub:'打地基：词汇 + 语感 + 长难句',
+     focus:['手机背词过第一轮（不背单词 APP，不进工作台）','长难句拆解，顺手丢进生词本','听力泛听磨耳朵，先练耳朵不追求全懂','阅读每周 2 篇精读，查的词记生词本']},
+    {key:'spec',name:'专项突破',start:'2026-10-05',end:'2026-11-08',
+     sub:'按题型拿稳定正确率',
+     focus:['听力(W5–6)：短/长对话、篇章抓关键词 + 预判，错题录音精听','阅读(W6–7)：定位与同义替换','写译(W7–8)：三段式模板焊死，每周 1 写 1 译丢我批改','词汇(W9)：高频词二轮 + 真题生词回炉']},
+    {key:'mock',name:'套题模考',start:'2026-11-09',end:'2026-12-06',
+     sub:'全真节奏 + 错题闭环',
+     focus:['每周六上午 9:00–11:20 严格计时整套真题','其余天精析，每道错题进错本标错因','哪块正确率掉，下周专项补','看正确率趋势，工作台指路']},
+    {key:'sprint',name:'冲刺固化',start:'2026-12-07',end:'2026-12-19',
+     sub:'定型不翻车',
+     focus:['作文模板背到脱口，翻译高频词组过一遍','隔天一套轻量保温（整套或只做弱项）','错题本最后一轮扫，确认“已掌握”真掌握','考前 3 天不碰新题，看笔记 + 生词本 + 模板，调作息']}
+  ]
+};
+function planPhaseIndex(t){
+  var ph=PLAN.phases,cur=0;
+  for(var i=0;i<ph.length;i++){if(t>=ph[i].start)cur=i;}
+  return Math.min(cur,ph.length-1);
+}
+function viewPlan(){
+  var t=todayStr();
+  var exam=state.settings.examDate;
+  var ph=PLAN.phases,cur=planPhaseIndex(t);
+  var totalDays=diffDays(PLAN.start,exam)+1;
+  var wk=Math.max(1,Math.min(15,Math.floor(diffDays(PLAN.start,t)/7)+1));
+  var segs='';
+  for(var i=0;i<ph.length;i++){
+    var p=ph[i];
+    var fill = i<cur?1 : (i>cur?0 : Math.min(1,Math.max(0,diffDays(p.start,t)/(diffDays(p.start,p.end)+1))));
+    var col = i<cur?'#16A34A' : (i===cur?'#EA580C':'#EFEAE0');
+    segs+='<div class="pp-seg"><div class="pp-track"><div class="pp-fill" style="width:'+(fill*100).toFixed(0)+'%;background:'+col+'"></div></div>'+
+          '<div class="pp-cap'+(i===cur?' on':'')+'"><b>'+(i+1)+'</b>'+esc(p.name)+'</div></div>';
+  }
+  var fo=ph[cur].focus.map(function(x){return '<li>'+esc(x)+'</li>';}).join('');
+  var doneQ=(state.practice||[]).filter(function(p){return p.date===t;}).reduce(function(a,p){return a+(parseInt(p.total,10)||0);},0);
+  var goal=state.settings.dailyGoal||state.settings.dailyNew||5;
+  var drillOk=doneQ>=goal;
+  state.planChecks=state.planChecks||{};var pc=state.planChecks[t]||{};
+  var items=[
+    {key:'vocab',text:'手机背词（不背单词 APP）',auto:false,note:'单词进度在手机，不进工作台'},
+    {key:'drill',text:'当日专项刷题（今日已做 '+doneQ+' 题 / 目标 '+goal+'）',auto:drillOk,note:drillOk?'已达标，自动勾':'达每日题量目标自动打卡'},
+    {key:'review',text:'错本复盘 / 今日总结',auto:false,note:'顺手导个 JSON 备份更稳'}
+  ];
+  var tasks=items.map(function(x){
+    var ck=x.auto?true:!!pc[x.key];
+    var click=x.auto?'':' onclick="togglePlan(\''+x.key+'\')"';
+    return '<div class="task-line'+(ck?' done':'')+click+'">'+
+      '<span class="box">'+(ck?icon('check',12):'')+'</span>'+
+      '<span class="grow"><span>'+esc(x.text)+(x.auto?' <i class="auto">自动</i>':'')+'</span>'+
+      '<span class="muted">'+esc(x.note)+'</span></span></div>';
+  }).join('');
+  return ''+
+  '<div class="card plan-card">'+
+    '<h3>'+icon('target',16)+'复习总计划<span class="sub">距考试 '+countdown()+' 天 · 共约 '+totalDays+' 天</span></h3>'+
+    '<div class="pp-bar">'+segs+'</div>'+
+    '<div class="pp-now">当前阶段 <b>'+esc(ph[cur].name)+'</b> · 第 <b>'+wk+'</b> 周 / 共 15 周 · '+esc(ph[cur].sub)+'</div>'+
+  '</div>'+
+  '<div class="card">'+
+    '<h3>'+icon('book',16)+'本周焦点<span class="sub">'+esc(ph[cur].name)+' · W'+wk+'</span></h3>'+
+    '<ul class="plan-focus">'+fo+'</ul>'+
+  '</div>'+
+  '<div class="card">'+
+    '<h3>'+icon('check',16)+'今日任务<span class="sub">点一下勾选，按日期自动存</span></h3>'+
+    tasks+
+    '<div class="muted" style="margin-top:8px">节奏：早 20min 手机背词 → 午/晚 60min 专项 → 晚 20min 错本 + 打卡 → 周末模考</div>'+
+  '</div>';
+}
+function togglePlan(key){
+  var t=todayStr();
+  state.planChecks=state.planChecks||{};
+  state.planChecks[t]=state.planChecks[t]||{};
+  state.planChecks[t][key]=!state.planChecks[t][key];
+  save();
+  refreshAll();
+}
 function switchTab(id){curTab=id;refreshAll();window.scrollTo(0,0);}
 function setFilter(k,v){bookFilter[k]=v;refreshAll();}
 function addPractice(){
