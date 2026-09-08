@@ -760,7 +760,7 @@ var ERR_INTERVALS=[1,3,7,15,30];
 var TYPES=['听力','阅读','写作','翻译'];
 var REASONS=['词汇不认识','语法不熟','理解偏差','粗心失误','时间不够','其他','题库答错'];
 var TAGCLS={'听力':'listening','阅读':'reading','写作':'writing','翻译':'translating'};
-var TABS=[{id:'today',name:'今日',ic:'today'},{id:'quiz',name:'刷题',ic:'chart'},{id:'book',name:'错本',ic:'book'},{id:'bank',name:'真题',ic:'bank'},{id:'plan',name:'计划',ic:'target'},{id:'write',name:'写译',ic:'edit'},{id:'listen',name:'听力',ic:'vol'},{id:'read',name:'阅读',ic:'replay'},{id:'skill',name:'技巧',ic:'star'},{id:'me',name:'我的',ic:'user'}];
+var TABS=[{id:'today',name:'今日',ic:'today'},{id:'quiz',name:'刷题',ic:'chart'},{id:'book',name:'错本',ic:'book'},{id:'plan',name:'计划',ic:'target'},{id:'write',name:'写译',ic:'edit'},{id:'me',name:'我的',ic:'user'}];
 var ICONS={
   today:'<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',
   chart:'<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
@@ -851,7 +851,6 @@ function playScript(text,key){
     setTimeout(function(){try{if(s.resume)s.resume();s.speak(u);}catch(e){toast('播放失败');}},120);
   }catch(e){}
 }
-function playBankScript(id){var it=BANK_MAP[id];if(it&&it.script)playScript(it.script,id);}
 function renderPlayBtn(){
   var b=document.getElementById('apBtn');
   if(b)b.innerHTML=(PS.playing?icon('pause',16):icon('play',16))+' '+(PS.playing?'暂停':'播放听力');
@@ -870,7 +869,7 @@ function sampleState(){
   var t=todayStr();
   var s={
     version:1,
-    settings:{dailyNew:10,dailyGoal:5,examDate:defaultExamDate(),level:'CET4',bank:{attempts:0,correct:0,byType:{},done:{}}},
+    settings:{dailyNew:10,examDate:defaultExamDate(),level:'CET4',bank:{attempts:0,correct:0,byType:{},done:{}}},
     wordProgress:{},
     dailyQueue:null,
     vocab:[],
@@ -925,7 +924,6 @@ function normalizeState(s){
   if(!s||typeof s!=='object')return d;
   var out=base;
   out.settings.dailyNew=clamp(parseInt((s.settings||{}).dailyNew,10)||10,1,50);
-  out.settings.dailyGoal=clamp(parseInt((s.settings||{}).dailyGoal,10)||5,1,50);
   out.settings.examDate=(s.settings&&s.settings.examDate)?String(s.settings.examDate):defaultExamDate();
   out.settings.bank=(s.settings&&s.settings.bank)?s.settings.bank:{attempts:0,correct:0,byType:{},done:{}};
   out.settings.level=(s.settings&&s.settings.level)||'CET4';
@@ -1383,16 +1381,6 @@ function typeStat(){
     return {type:ty,total:tot,correct:cor,rate:tot?Math.round(cor*100/tot):0};
   });
 }
-function todayDone(){return state.dayStats[todayStr()]||0;}
-function dailyGoal(){return state.settings.dailyGoal||5;}
-function maybeAutoCheckin(){
-  var t=todayStr();
-  if(todayDone()>=dailyGoal()&&state.checkins.indexOf(t)<0){
-    state.checkins.push(t);save();syncMark('day:'+t);
-    toast('今日任务完成，已自动打卡');return true;
-  }
-  return false;
-}
 function overview(){
   var learned=Object.keys(state.wordProgress).length;
   var mastered=0;
@@ -1403,7 +1391,7 @@ function overview(){
     learned:learned,mastered:mastered,total:WORDS.length,
     streak:calcStreak(),
     pTotal:pt,pRate:pt?Math.round(pc*100/pt):0,
-    errCount:state.errors.length,todayDone:todayDone(),goal:dailyGoal(),
+    errCount:state.errors.length,
     vocabCount:state.vocab.length,
     records:state.practice.length+state.errors.length+state.vocab.length+learned
   };
@@ -1429,12 +1417,8 @@ function renderMain(){
   if(curTab==='today')m.innerHTML=viewToday();
   else if(curTab==='quiz')m.innerHTML=viewQuiz();
   else if(curTab==='book')m.innerHTML=viewBook();
-  else if(curTab==='bank')m.innerHTML=viewBank();
   else if(curTab==='plan')m.innerHTML=viewPlan();
   else if(curTab==='write')m.innerHTML=viewWrite();
-  else if(curTab==='listen')m.innerHTML=viewListen();
-  else if(curTab==='read')m.innerHTML=viewRead();
-  else if(curTab==='skill')m.innerHTML=viewSkill();
   else m.innerHTML=viewMe();
   if(curTab==='me'){ if(ONLINE)renderSyncTable(); else renderWebSync(); }
 }
@@ -1452,7 +1436,7 @@ function renderHeader(){
     pill.innerHTML=icon('flame',15)+'<span>连续 '+s+' 天</span>';
   }
   var sub=$('#brandSub');
-  if(sub)sub.textContent='距考试 '+countdown()+' 天 · 词库 '+overview().learned+'/'+WORDS.length;
+  if(sub)sub.textContent='距考试 '+countdown()+' 天 · 累计刷题 '+overview().pTotal+' 题';
   wsRenderSync();
 }
 function ringSVG(done,total){
@@ -1465,11 +1449,13 @@ function ringSVG(done,total){
 }
 function renderHero(){
   var el=$('#hero');if(!el)return;
-  var t=todayStr(),total=dailyGoal(),done=Math.min(todayDone(),total),left=Math.max(0,total-done);
+  var t=todayStr();
+  var pi=planItemsFor(t);
+  var doneQ=pi.doneQ, goal=pi.goal, drillOk=pi.drillOk;
   var de=dueErrors(t).length,mp=missPractice(t);
   var ov=overview();
-  var pct=total?Math.round(done*100/total):0;
-  var hasTodo=(left>0||de>0||mp>0);
+  var ringPct=goal?Math.min(100,Math.round(doneQ/goal*100)):0;
+  var hasTodo=(mp>0||de>0||!drillOk);
   el.innerHTML=
     '<div class="hero-l">'+
       '<div class="cd-label">距四级考试</div>'+
@@ -1478,103 +1464,94 @@ function renderHero(){
     '</div>'+
     '<div class="hero-ring"><svg viewBox="0 0 120 120" width="120" height="120">'+
       '<circle cx="60" cy="60" r="52" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="9"/>'+
-      '<circle cx="60" cy="60" r="52" fill="none" stroke="#FB923C" stroke-width="9" stroke-linecap="round" stroke-dasharray="'+(2*Math.PI*52*pct/100).toFixed(1)+' 400" transform="rotate(-90 60 60)"/>'+
-      '</svg><span>'+pct+'%</span></div>'+
+      '<circle cx="60" cy="60" r="52" fill="none" stroke="#FB923C" stroke-width="9" stroke-linecap="round" stroke-dasharray="'+(2*Math.PI*52*ringPct/100).toFixed(1)+' 400" transform="rotate(-90 60 60)"/>'+
+      '</svg><span>'+ringPct+'%</span></div>'+
     '<div class="hero-r">'+
-      '<div class="hero-stat'+(left>0?' urgent':'')+'" onclick="'+(left>0?'switchTab(\'bank\')':'switchTab(\'today\')')+'"><b style="'+(left>0?'color:#FCA5A5':'')+'">'+left+'<i>题</i></b><span>今日剩余</span></div>'+
       '<div class="hero-stat" onclick="switchTab(\'quiz\')"><b style="'+(mp>0?'color:#FCA5A5':'')+'">'+mp+'<i>项</i></b><span>未记录刷题</span></div>'+
       '<div class="hero-stat" onclick="switchTab(\'book\')"><b style="'+(de>0?'color:#FCA5A5':'')+'">'+de+'<i>题</i></b><span>到期错题</span></div>'+
-      '<div class="hero-prog"><div class="bar"><i style="width:'+(total?(done*100/total).toFixed(0):0)+'%"></i></div>'+
-      '<div class="lab"><span>今日进度</span><b>'+done+'/'+total+'</b></div></div>'+
+      '<div class="hero-stat" onclick="switchTab(\'plan\')"><b>'+ov.streak+'<i>天</i></b><span>连续打卡</span></div>'+
+      '<div class="hero-prog"><div class="bar"><i style="width:'+ringPct+'%"></i></div>'+
+      '<div class="lab"><span>今日刷题进度</span><b>'+doneQ+'/'+goal+' 题</b></div></div>'+
     '</div>'+
     (hasTodo
-      ? '<button class="btn hero-btn" onclick="'+(left>0?'switchTab(\'bank\')':(de>0?'switchTab(\'book\')':'switchTab(\'quiz\')'))+'">'+icon('zap',16)+'去处理</button>'
-      : '<div class="hero-done">'+icon('check',16)+'<span>今天已清空</span></div>');
+      ? '<button class="btn hero-btn" onclick="'+(de>0?'switchTab(\'book\')':(mp>0?'switchTab(\'quiz\')':'switchTab(\'today\')'))+'">'+icon('zap',16)+'去处理</button>'
+      : '<div class="hero-done">'+icon('check',16)+'<span>今日计划已完成</span></div>');
 }
 function renderSideToday(){
   var el=$('#sideToday');if(!el)return;
-  var t=todayStr(),de=dueErrors(t),ov=overview(),total=dailyGoal(),done=Math.min(todayDone(),total),left=Math.max(0,total-done);
+  var t=todayStr(),de=dueErrors(t),ov=overview();
+  var pi=planItemsFor(t);
   var body='';
-  if(left>0){
-    body='<div class="st-num">'+left+'<b>题</b></div>'+
-      '<div class="st-lab">今日还剩'+(de.length>0?' · '+de.length+' 道错题到期':'')+'</div>'+
-      '<div class="st-row"><span>今日已做</span><b>'+done+' 题</b></div>'+
-      '<div class="st-row"><span>今日目标</span><b>'+total+' 题</b></div>'+
-      '<div class="st-row"><span>距考试</span><b>'+countdown()+' 天</b></div>'+
-      '<button class="btn block" onclick="switchTab(\'bank\')">去刷题</button>'+
-      '<div class="st-foot">做完每日题量自动打卡，连续天数续上</div>';
-  }else if(de.length>0){
+  if(de.length>0){
     body='<div class="st-num">'+de.length+'<b>题</b></div>'+
       '<div class="st-lab">道错题到期该复习</div>'+
       '<div class="st-row"><span>距考试</span><b>'+countdown()+' 天</b></div>'+
       '<button class="btn block" onclick="switchTab(\'book\')">去复习错题</button>';
-  }else{
-    body='<div class="st-num">'+done+'<b>题</b></div>'+
-      '<div class="st-lab">今日目标已完成，明天再来</div>'+
-      '<div class="st-row"><span>连续打卡</span><b>'+ov.streak+' 天</b></div>'+
-      '<div class="st-row"><span>累计答题</span><b>'+ov.pTotal+' 题</b></div>'+
+  }else if(!pi.drillOk){
+    body='<div class="st-num">'+pi.doneQ+'<b>题</b></div>'+
+      '<div class="st-lab">今日已做 / 目标 '+pi.goal+' 题</div>'+
       '<div class="st-row"><span>距考试</span><b>'+countdown()+' 天</b></div>'+
-      '<div class="st-foot">可在「我的」调整每日题量目标与考试日期</div>';
+      '<button class="btn block" onclick="switchTab(\'quiz\')">去刷题</button>';
+  }else{
+    body='<div class="st-num">0<b>待办</b></div>'+
+      '<div class="st-lab">今日计划已完成，保持节奏</div>'+
+      '<div class="st-row"><span>连续打卡</span><b>'+ov.streak+' 天</b></div>'+
+      '<div class="st-row"><span>累计刷题</span><b>'+ov.pTotal+' 题</b></div>'+
+      '<div class="st-row"><span>距考试</span><b>'+countdown()+' 天</b></div>'+
+      '<div class="st-foot">可在「我的」调整每日刷题目标与考试日期</div>';
   }
   el.innerHTML=body;
 }
 
 /* ---------------- 视图：今日 ---------------- */
 function viewToday(){
-  var t=todayStr(),ov=overview(),q=ensureQueue(t);
-  var total=dailyGoal(),done=Math.min(todayDone(),total),left=Math.max(0,total-done);
+  var t=todayStr(),ov=overview();
+  var pi=planItemsFor(t);
   var heat=heatDays();
   var heatHTML=heat.map(function(d){
     var lv=heatLevel(d.count);
     return '<i class="'+(lv?'l'+lv:'')+(d.isToday?' today':'')+'" title="'+d.date+' · '+d.count+' 次"></i>';
   }).join('');
-  var tasks=[];
-  tasks.push({done:left===0,text:'完成每日题量 '+done+'/'+total+' 题',act:'switchTab(\'bank\')'});
-  tasks.push({done:!missPractice(t),text:'记录今天的刷题数据（听力/阅读/写作/翻译）',act:'switchTab(\'quiz\')'});
-  var de=dueErrors(t);
-  tasks.push({done:de.length===0,text:de.length?('复习 '+de.length+' 道到期错题'):'没有到期错题',act:'switchTab(\'book\')'});
-  var taskHTML=tasks.map(function(x){
-    return '<div class="task-line'+(x.done?' done':'')+'" onclick="'+x.act+'">'+
-      '<span class="box">'+(x.done?icon('check',12):'')+'</span><span>'+esc(x.text)+'</span></div>';
+  var taskHTML=pi.items.map(function(x){
+    return '<div class="task-line'+(x.ck?' done':'')+(x.click?'" onclick="'+x.click+'"':'"')+'>'+
+      '<span class="box">'+(x.ck?icon('check',12):'')+'</span>'+
+      '<span class="grow"><span>'+esc(x.text)+(x.auto?' <i class="auto">自动</i>':'')+'</span>'+
+      '<span class="muted">'+esc(x.note)+'</span></span></div>';
+  }).join('');
+  var audioHTML=LISTEN_AUDIO.slice(0,2).map(function(a){
+    return '<div style="margin-top:10px"><div class="muted" style="margin-bottom:4px">'+esc(a.label)+'</div><audio controls preload="none" src="'+a.src+'" style="width:100%"></audio></div>';
   }).join('');
   return ''+
   '<div class="today-grid">'+
     '<div class="sub">'+
       '<div class="card">'+
-        '<h3>'+icon('target',16)+'今日题量<span class="sub">剩余 '+left+' · 目标 '+total+'</span></h3>'+
-        '<div class="ring-wrap">'+ringSVG(done,total)+
-          '<div class="grow">'+
-            '<div class="muted-2" style="margin-bottom:10px">'+
-              (left?('今天还有 <b style="color:var(--ink)">'+left+'</b> 道题，做完自动打卡。')
-                   :'今日题量已完成，已自动打卡，连续 '+ov.streak+' 天，稳住。')+
-            '</div>'+
-            '<button class="btn block" onclick="switchTab(\'bank\')">'+icon('zap',16)+(left?'去刷真题':'再刷几道')+'</button>'+
-            '<div class="muted" style="margin-top:8px">答错的题会自动进错本，按 1 / 2 / 4 / 7 / 15 / 30 天复习</div>'+
-          '</div>'+
-        '</div>'+
+        '<h3>'+icon('target',16)+'今日计划<span class="sub">按每日计划自动推送</span></h3>'+
+        taskHTML+
+        '<div class="muted" style="margin-top:10px">节奏：早 20min 手机背词 → 午/晚 60min 专项 → 晚 20min 错本 + 打卡</div>'+
       '</div>'+
       '<div class="card">'+
-        '<h3>'+icon('check',16)+'今日任务<span class="sub">点一下跳到对应模块</span></h3>'+
-        taskHTML+
+        '<h3>'+icon('check',16)+'今日打卡<span class="sub">近 30 天</span></h3>'+
+        '<div class="heat">'+heatHTML+'</div>'+
+        '<div class="heat-foot"><span>30 天前 → 今天</span>'+
+          '<span class="heat-legend">少<i style="background:#F5EFE4"></i><i style="background:#FFE0BE"></i><i style="background:#FB923C"></i><i style="background:#EA580C"></i>多</span></div>'+
+        '<div class="cal-mini-stats"><div>连续 <b>'+ov.streak+'</b> 天</div><div>今日 <b>'+(state.dayStats[t]||0)+'</b> 次</div><div>累计 <b>'+ov.pTotal+'</b> 题</div></div>'+
       '</div>'+
     '</div>'+
     '<div class="sub">'+
       '<div class="card">'+
-        '<h3>'+icon('flame',16)+'打卡<span class="sub">近 30 天</span></h3>'+
-        '<div class="heat">'+heatHTML+'</div>'+
-        '<div class="heat-foot"><span>30 天前 → 今天</span>'+
-          '<span class="heat-legend">少<i style="background:#F5EFE4"></i><i style="background:#FFE0BE"></i><i style="background:#FB923C"></i><i style="background:#EA580C"></i>多</span></div>'+
-        '<div class="cal-mini-stats"><div>连续 <b>'+ov.streak+'</b> 天</div><div>今日 <b>'+done+'</b> 题</div><div>累计 <b>'+ov.pTotal+'</b> 题</div></div>'+
-      '</div>'+
-      '<div class="card">'+
         '<h3>'+icon('award',16)+'今日战绩</h3>'+
         '<div class="stat-grid">'+
-          '<div class="cell"><b>'+done+'</b><span>今日做题</span></div>'+
+          '<div class="cell"><b>'+pi.doneQ+'</b><span>今日已做</span></div>'+
           '<div class="cell"><b>'+ov.pTotal+'</b><span>累计刷题</span></div>'+
           '<div class="cell"><b>'+ov.pRate+'%</b><span>总正确率</span></div>'+
-          '<div class="cell"><b>'+ov.vocabCount+'</b><span>生词本</span></div>'+
+          '<div class="cell"><b>'+ov.errCount+'</b><span>错题</span></div>'+
         '</div>'+
         '<button class="btn ghost block" style="margin-top:12px" onclick="makePoster()">'+icon('down',15)+'下载今日战绩图</button>'+
+      '</div>'+
+      '<div class="card">'+
+        '<h3>'+icon('vol',16)+'今日听力<span class="sub">真实考场录音</span></h3>'+
+        audioHTML+
+        (LISTEN_AUDIO.length>2?'<div class="muted" style="margin-top:8px">更多年份真题录音见「刷题」→ 听力真题录音</div>':'')+
       '</div>'+
     '</div>'+
   '</div>';
@@ -1670,7 +1647,10 @@ function viewQuiz(){
   '<div class="section">'+
     '<div class="section-head"><h4>历史记录</h4><span class="meta">最近 20 条</span></div>'+
     '<div class="card">'+logHTML+'</div>'+
-  '</div>';
+  '</div>'+
+  renderListenAudio()+
+  viewListen()+
+  viewRead();
 }
 
 /* ---------------- 视图：错本 ---------------- */
@@ -1739,26 +1719,7 @@ function viewBook(){
       '</div>'+
     '</div>'+
   '</div>'+
-  '<div class="book-grid">'+
-    '<div class="sub">'+
-      '<div class="card">'+
-        '<h3>'+icon('book',16)+'生词本<span class="sub">'+state.vocab.length+' 词</span></h3>'+
-        vocabHTML+
-      '</div>'+
-    '</div>'+
-    '<div class="sub">'+
-      '<div class="card">'+
-        '<h3>'+icon('clock',16)+'复习节奏</h3>'+
-        '<div class="lv-legend" style="margin-bottom:10px"><span><i style="background:#EA580C"></i>错题：1 / 3 / 7 / 15 / 30 天</span></div>'+
-        '<div class="lv-legend"><span><i style="background:#FB923C"></i>单词：1 / 2 / 4 / 7 / 15 / 30 天</span></div>'+
-        '<div class="muted" style="margin-top:12px;line-height:1.7">'+
-          '· 标「认识」升级，间隔往后推；标「不认识」降级并回到今日队尾。<br>'+
-          '· 同一个词当天连错 3 次，自动改到明天，不再纠缠。<br>'+
-          '· 昨天没背完的新词，今天自动滚进来，不会凭空消失。'+
-        '</div>'+
-      '</div>'+
-    '</div>'+
-  '</div>';
+  '';
 }
 
 /* ---------------- 视图：我的 ---------------- */
@@ -1771,8 +1732,6 @@ function viewMe(){
   '<div class="section">'+
     '<div class="section-head"><h4>数据概览</h4></div>'+
     '<div class="card me-ov"><div class="stat-grid">'+
-      '<div class="cell"><b>'+ov.todayDone+'</b><span>今日做题</span></div>'+
-      '<div class="cell"><b>'+ov.pTotal+'</b><span>累计刷题</span></div>'+
       '<div class="cell"><b>'+ov.streak+'</b><span>连续天数</span></div>'+
       '<div class="cell"><b>'+ov.pTotal+'</b><span>累计刷题</span></div>'+
       '<div class="cell"><b>'+ov.pRate+'%</b><span>总正确率</span></div>'+
@@ -1783,7 +1742,7 @@ function viewMe(){
     '<div class="sub">'+
       '<div class="card">'+
         '<h3>'+icon('edit',16)+'备考设置</h3>'+
-        '<div class="field"><label for="sDaily">每日题量目标</label><input type="number" id="sDaily" inputmode="numeric" min="1" max="50" value="'+dailyGoal()+'"></div>'+
+        '<div class="field"><label for="sGoal">每日刷题目标（题）</label><input type="number" id="sGoal" inputmode="numeric" min="1" max="200" value="'+(state.settings.dailyGoal||state.settings.dailyNew||5)+'"></div>'+
         '<div class="field"><label for="sExam">考试日期</label><input type="date" id="sExam" value="'+esc(state.settings.examDate)+'"></div>'+
         '<button class="btn block" onclick="saveSettings()">保存设置</button>'+
         '<div class="muted" style="margin-top:8px">默认取当年 12 月第三个周六，准确时间以教育部考试中心官方公告为准。</div>'+
@@ -1825,10 +1784,9 @@ function viewMe(){
       '<div class="card">'+
         '<h3>'+icon('star',16)+'关于</h3>'+
         '<div class="muted" style="line-height:1.8">'+
-          '· 内置 48 个四级高频词，含音标、词性、释义与常考搭配。<br>'+
           '· 单文件页面，资源全内联，断网可用；无外部接口依赖。<br>'+
           '· 题型结构、分值与考试时间以官方大纲和公告为准。<br>'+
-          '· 发音使用系统朗读能力，设备不支持时会自动隐藏发音按钮。'+
+          '· 听力真题音频为真实考场录音，自托管、点开即播。'+
         '</div>'+
       '</div>'+
     '</div>'+
@@ -1858,121 +1816,8 @@ function renderSyncTable(){
     }).join('')+'</tbody></table>';
 }
 
-/* ================================================================
-   背词专注页（独立渲染，不被其它渲染函数触发）
-   ================================================================ */
-var deck={open:false,list:[],idx:0,flipped:false};
-function openDeck(){
-  var t=todayStr();
-  deck.list=queueLeft(t);
-  if(!deck.list.length){toast('今日队列已清空');return;}
-  deck.idx=0;deck.flipped=false;deck.open=true;
-  var m=$('#deckMask');m.classList.add('show');m.setAttribute('aria-hidden','false');
-  document.body.style.overflow='hidden';
-  renderDeck();
-}
-function closeDeck(){
-  deck.open=false;
-  var m=$('#deckMask');m.classList.remove('show');m.setAttribute('aria-hidden','true');
-  document.body.style.overflow='';
-  refreshAll();
-}
-function renderDeck(){
-  var m=$('#deckMask');if(!m)return;
-  if(deck.idx>=deck.list.length){renderFinish(m);return;}
-  var w=WMAP[deck.list[deck.idx]];
-  if(!w){deck.idx++;renderDeck();return;}
-  m.innerHTML=
-    '<div class="deck-top">'+
-      '<button class="deck-close" onclick="closeDeck()">关闭</button>'+
-      '<div class="prog">'+(deck.idx+1)+' / '+deck.list.length+'</div>'+
-      '<div style="width:64px"></div>'+
-    '</div>'+
-    '<div class="flip-zone">'+
-      '<div class="flip'+(deck.flipped?' flipped':'')+'" id="flipCard" onclick="flipCard()" role="button" tabindex="0" aria-label="翻转卡片">'+
-        '<div class="face">'+
-          '<div class="word">'+esc(w.w)+'</div>'+
-          '<div class="phonetic">'+esc(w.ph)+'</div>'+
-          (canSpeak()?'<button class="speak-btn" onclick="event.stopPropagation();speak(\''+esc(w.w)+'\')" aria-label="朗读">'+icon('vol',20)+'</button>':'')+
-          '<div class="hint">点卡片翻面看释义</div>'+
-        '</div>'+
-        '<div class="face back">'+
-          '<div class="pos">'+esc(w.pos)+'</div>'+
-          '<div class="def">'+esc(w.def)+'</div>'+
-          '<div class="coll">'+esc(w.coll)+'</div>'+
-          '<div class="hint">还记得住吗？</div>'+
-        '</div>'+
-      '</div>'+
-    '</div>'+
-    '<div class="deck-actions">'+
-      '<button class="btn gray" onclick="answerCard(false)">不认识</button>'+
-      '<button class="btn" onclick="answerCard(true)">认识</button>'+
-    '</div>';
-}
-function renderFinish(m){
-  var t=todayStr();
-  var done=queueTotal(t);
-  if(state.checkins.indexOf(t)<0){state.checkins.push(t);}
-  state.dayStats[t]=(state.dayStats[t]||0)+done;
-  syncMark('day:'+t);
-  save();
-  m.innerHTML='<div class="deck-top"><button class="deck-close" onclick="closeDeck()">关闭</button>'+
-    '<div class="prog">完成</div><div style="width:64px"></div></div>'+
-    '<div class="finish-wrap"><div class="stamp">今日清空</div>'+
-    '<div class="muted" style="margin-top:16px">今天过了 '+done+' 个词，连续 '+calcStreak()+' 天</div>'+
-    '<div class="row" style="margin-top:22px;gap:10px">'+
-      '<button class="btn ghost" onclick="makePoster()">'+icon('down',15)+'存战绩图</button>'+
-      '<button class="btn" onclick="closeDeck()">回首页</button>'+
-    '</div></div>';
-  celebrate();
-}
-function flipCard(){deck.flipped=!deck.flipped;var f=$('#flipCard');if(f)f.classList.toggle('flipped',deck.flipped);}
-function answerCard(known){
-  if(!deck.open)return;
-  var t=todayStr(),id=deck.list[deck.idx];
-  if(id==null)return;
-  var p=state.wordProgress[id]||{lv:0,next:t,dealt:true,wrongToday:0,wrongDate:''};
-  var q=ensureQueue(t);
-  if(known){
-    p.lv=clamp(p.lv+1,0,6);
-    p.next=addDays(t,INTERVALS[clamp(p.lv-1,0,5)]);
-    p.wrongToday=0;p.wrongDate='';
-    if(q.done.indexOf(id)<0)q.done.push(id);
-    state.dayStats[t]=(state.dayStats[t]||0)+1;
-  }else{
-    p.lv=0;
-    p.wrongToday=(p.wrongDate===t?(p.wrongToday||0)+1:1);
-    p.wrongDate=t;
-    addVocabSilent(id);
-    if(p.wrongToday>=3){
-      p.next=addDays(t,1);
-      if(q.done.indexOf(id)<0)q.done.push(id);
-      toast('连错 3 次，这个词改到明天');
-    }else{
-      p.next=t;
-      /* 回到今日队尾 */
-      var pos=deck.list.indexOf(id);
-      if(pos>=0)deck.list.splice(pos,1);
-      deck.list.push(id);
-      deck.idx--;
-    }
-  }
-  p._t=Date.now();
-  state.wordProgress[id]=p;
-  state.dailyQueue=q;
-  save();
-  syncMark('word:'+id);
-  syncMark('day:'+t);
-  deck.flipped=false;
-  deck.idx++;
-  if(deck.idx>=deck.list.length){renderFinish($('#deckMask'));}
-  else{renderDeck();}
-}
-function addVocabSilent(id){
-  for(var i=0;i<state.vocab.length;i++)if(state.vocab[i].wordId===id)return;
-  state.vocab.push({wordId:id,addedAt:todayStr(),_t:Date.now()});
-  syncMark('vocab:'+id);
-}
+/* 背词专注页已移除：用户要求站内不背单词（单词进度在手机端不背单词 APP） */
+
 function celebrate(){
   var colors=['#EA580C','#FB923C','#16A34A','#2563EB','#9333EA','#D97706'];
   for(var i=0;i<26;i++){
@@ -2014,6 +1859,19 @@ function planPhaseIndex(t){
   for(var i=0;i<ph.length;i++){if(t>=ph[i].start)cur=i;}
   return Math.min(cur,ph.length-1);
 }
+function planItemsFor(t){
+  var goal=state.settings.dailyGoal||state.settings.dailyNew||5;
+  var doneQ=(state.practice||[]).filter(function(p){return p.date===t;}).reduce(function(a,p){return a+(parseInt(p.total,10)||0);},0);
+  var drillOk=doneQ>=goal;
+  var de=dueErrors(t).length;
+  var pc=(state.planChecks&&state.planChecks[t])||{};
+  var items=[
+    {key:'vocab',text:'手机背词（不背单词 APP）',auto:false,ck:!!pc.vocab,note:'单词进度在手机，不进工作台',click:"togglePlan('vocab')"},
+    {key:'drill',text:'当日专项刷题（今日已做 '+doneQ+' 题 / 目标 '+goal+'）',auto:drillOk,ck:drillOk,note:drillOk?'已达标，自动勾':'达每日题量目标自动打卡',click:"switchTab('quiz')"},
+    {key:'review',text:'错本复盘 / 今日总结'+(de?'（'+de+' 道到期）':'') ,auto:false,ck:!!pc.review,note:'顺手导个 JSON 备份更稳',click:"togglePlan('review')"}
+  ];
+  return {goal:goal,doneQ:doneQ,drillOk:drillOk,items:items};
+}
 function viewPlan(){
   var t=todayStr();
   var exam=state.settings.examDate;
@@ -2029,20 +1887,11 @@ function viewPlan(){
           '<div class="pp-cap'+(i===cur?' on':'')+'"><b>'+(i+1)+'</b>'+esc(p.name)+'</div></div>';
   }
   var fo=ph[cur].focus.map(function(x){return '<li>'+esc(x)+'</li>';}).join('');
-  var doneQ=(state.practice||[]).filter(function(p){return p.date===t;}).reduce(function(a,p){return a+(parseInt(p.total,10)||0);},0);
-  var goal=state.settings.dailyGoal||state.settings.dailyNew||5;
-  var drillOk=doneQ>=goal;
-  state.planChecks=state.planChecks||{};var pc=state.planChecks[t]||{};
-  var items=[
-    {key:'vocab',text:'手机背词（不背单词 APP）',auto:false,note:'单词进度在手机，不进工作台'},
-    {key:'drill',text:'当日专项刷题（今日已做 '+doneQ+' 题 / 目标 '+goal+'）',auto:drillOk,note:drillOk?'已达标，自动勾':'达每日题量目标自动打卡'},
-    {key:'review',text:'错本复盘 / 今日总结',auto:false,note:'顺手导个 JSON 备份更稳'}
-  ];
-  var tasks=items.map(function(x){
-    var ck=x.auto?true:!!pc[x.key];
-    var click=x.auto?'':' onclick="togglePlan(\''+x.key+'\')"';
-    return '<div class="task-line'+(ck?' done':'')+click+'">'+
-      '<span class="box">'+(ck?icon('check',12):'')+'</span>'+
+  var pi=planItemsFor(t);
+  var goal=pi.goal,doneQ=pi.doneQ;
+  var tasks=pi.items.map(function(x){
+    return '<div class="task-line'+(x.ck?' done':'')+(x.click?'" onclick="'+x.click+'"':'"')+'>'+
+      '<span class="box">'+(x.ck?icon('check',12):'')+'</span>'+
       '<span class="grow"><span>'+esc(x.text)+(x.auto?' <i class="auto">自动</i>':'')+'</span>'+
       '<span class="muted">'+esc(x.note)+'</span></span></div>';
   }).join('');
@@ -2366,6 +2215,22 @@ function renderListenPractice(){
   '</div>';
 }
 
+/* ---------------- 听力真题录音（真实音频，近4年，已自托管） ---------------- */
+var LISTEN_AUDIO=[
+ {id:'a202406',label:'2024年6月 真题（第一套）',src:'audio/cet4-2024-06-s1.mp3'},
+ {id:'a202312',label:'2023年12月 真题（第一套）',src:'audio/cet4-2023-12-s1.mp3'}
+];
+function renderListenAudio(){
+  var items=LISTEN_AUDIO.map(function(a){
+    return '<div class="card">'+
+      '<h3>'+icon('vol',16)+esc(a.label)+'<span class="sub">真实考试录音 · 点击播放</span></h3>'+
+      '<audio controls preload="none" src="'+a.src+'" style="width:100%;margin-top:8px"></audio>'+
+      '<div class="muted" style="margin-top:8px">这是当年考场真实录音，先完整听一遍，再对照真题卷作答；需要逐句跟读可用下方「听写练习器」粘贴原文。</div>'+
+    '</div>';
+  }).join('');
+  return '<div class="section"><div class="section-head"><h4>听力真题录音</h4><span class="meta">真实考场录音 · 已自托管</span></div>'+items+
+    '<div class="muted" style="margin-top:10px">现有 2023年12月、2024年6月 两套真实考场录音（同源自托管，点开即播）。2025/2026 真题音频源多为动态加载或网盘，暂未抓到，抓到即补。</div></div>';
+}
 /* ---------------- 视图：听力专项 ---------------- */
 function viewListen(){
   var tips=[
@@ -2398,34 +2263,7 @@ function playDictation(){var el=$('#dText');if(el&&el.value.trim())playScript(el
 function toggleDictShow(){var el=$('#dText'),box=$('#dShow');if(!box)return;if(box.style.display==='none'){box.textContent=el?el.value:'';box.style.display='block';}else{box.style.display='none';}}
 function saveDictation(){var el=$('#dText');if(!el||!el.value.trim()){toast('先粘贴内容');return;}state.dictation=state.dictation||[];state.dictation.push({id:uid(),date:todayStr(),text:el.value.trim()});save();refreshAll();toast('已保存');}
 
-/* ---------------- 视图：技巧速记卡 ---------------- */
-var SKILLS=[
-  {k:'听力',steps:['先读选项猜场景','抓 5W1H 与转折词','数字边听边记','整体意思优先'],pit:['相近音混淆','被生词卡住']},
-  {k:'阅读',steps:['先题后文定位','同义替换是答案','排除无中生有/偷换概念','主旨看首尾段'],pit:['主观臆断','定位错段']},
-  {k:'写译',steps:['三段式骨架先搭','写作先优后劣给例','翻译直译保主干','有从句+明确观点'],pit:['缩写/时态错','无观点/超词数']},
-  {k:'词汇',steps:['高频词优先','语境记搭配','真题生词回炉','词根词缀辅助'],pit:['只背中文义','不记搭配']},
-  {k:'真题',steps:['严格计时整套','错题必进错本','弱项周补','看正确率趋势'],pit:['只做单项','不复盘']}
-];
-function viewSkill(){
-  var done=0;
-  var cards=SKILLS.map(function(s){
-    var ok=!!(state.skillDone&&state.skillDone[s.k]);
-    if(ok)done++;
-    return '<div class="skill-card'+(ok?' ok':'')+'">'+
-      '<div class="row" style="gap:6px"><h3>'+esc(s.k)+'</h3>'+
-      '<button class="btn sm '+(ok?'green':'gray')+'" style="margin-left:auto" onclick="toggleSkill(\''+esc(s.k)+'\')">'+icon('check',14)+(ok?'已掌握':'标记掌握')+'</button></div>'+
-      '<div class="skill-sub">步骤</div><ul class="plan-focus">'+s.steps.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>'+
-      '<div class="skill-sub">易错</div><ul class="plan-focus">'+s.pit.map(function(x){return '<li>'+esc(x)+'</li>';}).join('')+'</ul>'+
-    '</div>';
-  }).join('');
-  return ''+
-  '<div class="card">'+
-    '<h3>'+icon('star',16)+'技巧掌握度<span class="sub">'+done+' / '+SKILLS.length+' 已掌握</span></h3>'+
-    '<div class="pp-track"><div class="pp-fill" style="width:'+Math.round(done/SKILLS.length*100)+'%;background:var(--green)"></div></div>'+
-  '</div>'+
-  '<div class="skill-grid">'+cards+'</div>';
-}
-function toggleSkill(k){state.skillDone=state.skillDone||{};state.skillDone[k]=!state.skillDone[k];save();refreshAll();}
+
 
 function switchTab(id){curTab=id;refreshAll();window.scrollTo(0,0);}
 function setFilter(k,v){bookFilter[k]=v;refreshAll();}
@@ -2440,6 +2278,8 @@ function addPractice(){
   var id=uid();
   var rec={id:id,date:d,type:ty,total:tot,correct:cor,_t:Date.now()};
   state.practice.push(rec);
+  if(state.checkins.indexOf(d)<0)state.checkins.push(d);
+  state.dayStats[d]=(state.dayStats[d]||0)+tot;
   save();syncMark('practice:'+id);
   toast('已记录 '+ty+' '+cor+'/'+tot);
   refreshAll();
@@ -2484,16 +2324,14 @@ function removeVocab(id){
   refreshAll();
 }
 function saveSettings(){
-  var n=parseInt($('#sDaily').value,10);
+  var n=parseInt($('#sGoal').value,10);
   var d=$('#sExam').value;
-  if(!n||n<1){toast('每日题量目标至少 1');return;}
+  if(!n||n<1){toast('每日刷题目标至少 1');return;}
   if(!d){toast('请选择考试日期');return;}
-  state.settings.dailyNew=clamp(n,1,50);
-  state.settings.dailyGoal=clamp(n,1,50);
+  state.settings.dailyGoal=clamp(n,1,200);
   state.settings.examDate=d;
   state.meta.settingsT=Date.now();
   save();syncMark('settings');
-  maybeAutoCheckin();
   toast('设置已保存');
   refreshAll();
 }
@@ -2604,8 +2442,7 @@ function closeModal(){
   m.classList.remove('show');m.setAttribute('aria-hidden','true');
 }
 function makePoster(){
-  var t=todayStr(),ov=overview(),q=ensureQueue(t);
-  var done=q.ids.length-queueLeft(t).length;
+  var t=todayStr(),ov=overview(),pi=planItemsFor(t);
   var W=600,H=900,c=document.createElement('canvas');
   c.width=W;c.height=H;
   var g=c.getContext('2d');
@@ -2621,12 +2458,12 @@ function makePoster(){
   g.font='20px -apple-system,"PingFang SC",sans-serif';g.fillStyle='rgba(255,255,255,.7)';
   g.fillText('天后考试',44+String(countdown()).length*44,198);
   var cells=[
-    ['今日已背',done+' 词'],
-    ['连续背词',ov.streak+' 天'],
-    ['已学词汇',ov.learned+' / '+ov.total],
+    ['今日已做',pi.doneQ+' 题'],
     ['累计刷题',ov.pTotal+' 题'],
     ['总正确率',ov.pRate+'%'],
-    ['生词本',ov.vocabCount+' 词']
+    ['错题',ov.errCount+' 题'],
+    ['连续打卡',ov.streak+' 天'],
+    ['距考试',countdown()+' 天']
   ];
   g.fillStyle='#1E293B';g.font='bold 26px -apple-system,"PingFang SC",sans-serif';
   g.fillText('今日数据',44,286);
@@ -2649,7 +2486,7 @@ function makePoster(){
   g.fillStyle='#94A3B8';g.font='16px -apple-system,"PingFang SC",sans-serif';
   g.fillText('考试时间与题型以官方公告为准',44,H-56);
   g.fillStyle='#EA580C';g.font='bold 18px -apple-system,"PingFang SC",sans-serif';
-  g.fillText('艾宾浩斯背词 · 1/2/4/7/15/30 天',44,H-28);
+  g.fillText('真题驱动备考 · 真实考场录音',44,H-28);
   var url=c.toDataURL('image/png');
   var b=$('#posterBody');
   b.innerHTML='<h3 style="margin-bottom:12px">今日战绩</h3><img src="'+url+'" alt="今日战绩图">'+
@@ -2667,151 +2504,13 @@ function downloadPoster(){
 function closePoster(){$('#posterMask').classList.remove('show');}
 
 /* ================================================================
-   真题题库模块（题库练习型）—— 仿真题 MCQ，自动判分，答错入错本
-   听力题用浏览器 TTS 朗读自写脚本，零音频文件、零版权
-   ================================================================ */
-var BANK=[
- {id:'b01',type:'词汇',q:'The meeting was ______ until Friday because of the storm.',opts:['advanced','delayed','delivered','deleted'],ans:1,exp:'delay 推迟；会议因暴风雨推迟到周五。'},
- {id:'b02',type:'词汇',q:'He showed great ______ during the job interview.',opts:['confidence','conference','consequence','convenience'],ans:0,exp:'confidence 自信；他在面试中展现出很强的自信。'},
- {id:'b03',type:'词汇',q:'The doctor told him to ______ smoking at once.',opts:['give up','give in','give off','give away'],ans:0,exp:'give up 放弃；医生让他立刻戒烟。'},
- {id:'b04',type:'词汇',q:'This book ______ a wide range of topics in history.',opts:['covers','discovers','recovers','uncovers'],ans:0,exp:'cover 涵盖；这本书涵盖了广泛的历史话题。'},
- {id:'b05',type:'词汇',q:'We should ______ natural resources for future generations.',opts:['waste','conserve','consume','confuse'],ans:1,exp:'conserve 节约/保护；我们应为后代节约自然资源。'},
- {id:'b06',type:'词汇',q:'Her speech made a deep ______ on all the listeners.',opts:['impression','expression','permission','depression'],ans:0,exp:'make an impression on 给…留下印象。'},
- {id:'b07',type:'词汇',q:'The price of oil has ______ sharply this year.',opts:['risen','raised','arose','aroused'],ans:0,exp:'rise 上涨（不及物）；raise 为及物，需接宾语。'},
- {id:'b08',type:'词汇',q:'It took him a long time to ______ from the illness.',opts:['recover','discover','uncover','cover'],ans:0,exp:'recover from 从…康复。'},
- {id:'b09',type:'完形',q:'Although it was raining heavily, ______ he went out for a run.',opts:['but','yet','so','because'],ans:1,exp:'although 不能和 but 连用，此处用 yet 表“然而”。'},
- {id:'b10',type:'完形',q:'She is not only a singer ______ a talented composer.',opts:['and','but also','or','nor'],ans:1,exp:'not only ... but also 固定搭配。'},
- {id:'b11',type:'完形',q:'______ you work hard, you will make progress.',opts:['If','Unless','Although','Because'],ans:0,exp:'if 引导条件状语从句。'},
- {id:'b12',type:'完形',q:'The story was ______ interesting that I read it twice.',opts:['such','so','very','too'],ans:1,exp:'so + 形容词 + that 如此…以至于。'},
- {id:'b13',type:'完形',q:'He spoke ______ so that everyone in the room could hear him.',opts:['loud','louder','loudly','loudness'],ans:2,exp:'修饰动词 spoke 用副词 loudly。'},
- {id:'b14',type:'完形',q:'By the time we arrived, the train ______.',opts:['left','has left','had left','leaves'],ans:2,exp:'“到达”是过去，火车离开在先 → 过去完成时。'},
- {id:'b15',type:'完形',q:'Neither the students nor the teacher ______ aware of the change.',opts:['were','was','are','be'],ans:1,exp:'neither...nor 就近原则，teacher 单数 → was。'},
- {id:'b16',type:'完形',q:'I would rather you ______ here with us now.',opts:['are','were','will be','are being'],ans:1,exp:'would rather 后接虚拟语气用 were。'},
- {id:'b17',type:'阅读',q:'Tom was a shy boy who rarely spoke in class. His teacher encouraged him to join the reading club. Slowly, Tom found his voice and made many friends.\n\nWhy did Tom join the reading club?',opts:['To improve his grades','Because his teacher encouraged him','To avoid homework','Because he liked sports'],ans:1,exp:'原文提到老师鼓励他加入阅读俱乐部。'},
- {id:'b18',type:'阅读',q:'（上文同篇）What changed for Tom in the end?',opts:['He became more outgoing','He moved to another school','He stopped reading','He failed the class'],ans:0,exp:'Tom 找到了自己的声音并交到朋友，变得外向。'},
- {id:'b19',type:'阅读',q:'Cities plant more trees to fight heat. Trees give shade and cool the air. Some roofs are painted white to reflect sunlight. These changes help lower temperatures.\n\nWhat is the main idea?',opts:['Trees are beautiful','Cities use nature to stay cool','White roofs are cheap','People dislike hot weather'],ans:1,exp:'段落讲城市用树木/白顶等自然方式降温。'},
- {id:'b20',type:'阅读',q:'（上文同篇）According to the text, white roofs ______.',opts:['store water','reflect sunlight','grow plants','block wind'],ans:1,exp:'原文：white roofs reflect sunlight。'},
- {id:'b21',type:'阅读',q:'A study shows walking 30 minutes a day lowers heart-disease risk. Researchers followed 10,000 people for five years. Regular walkers were healthier.\n\nHow long did the study last?',opts:['30 minutes','5 years','10,000 days','One month'],ans:1,exp:'followed ... for five years → 研究持续 5 年。'},
- {id:'b22',type:'阅读',q:'（上文同篇）What did researchers find?',opts:['Walking harms the heart','Regular walkers were healthier','Only young people benefit','Sitting is better'],ans:1,exp:'规律步行者更健康。'},
- {id:'b23',type:'阅读',q:'Online learning grew popular during the pandemic. Students studied from home. However, many missed face-to-face contact with teachers.\n\nWhat disadvantage is mentioned?',opts:['It is too expensive','Lack of in-person contact','Poor internet everywhere','No courses available'],ans:1,exp:'原文提到缺少面对面交流。'},
- {id:'b24',type:'阅读',q:'（上文同篇）The word "pandemic" most likely means ______.',opts:['a holiday','a worldwide disease','a new school','a type of food'],ans:1,exp:'pandemic 指大流行病（全球性疾病）。'},
- {id:'b25',type:'听力',script:"W: Excuse me, is there a bank near here? M: Yes, just go straight and turn left at the second corner. It is next to the post office.",q:'Where is the bank?',opts:['Next to the post office','Across from the school','Behind the library','In front of the market'],ans:0,exp:'对话说银行在邮局旁边。'},
- {id:'b26',type:'听力',script:"M: Would you like some coffee? W: No, thanks. I prefer tea.",q:'What does the woman want?',opts:['Coffee','Tea','Juice','Water'],ans:1,exp:'女士说更喜欢茶。'},
- {id:'b27',type:'听力',script:"W: The meeting is at three, but Tom is ten minutes late. M: Again? He is always late.",q:'When does the meeting start?',opts:['At 3:00','At 3:10','At 2:50','At 4:00'],ans:0,exp:'会议三点开始，Tom 迟到 10 分钟。'},
- {id:'b28',type:'听力',script:"M: How much is the red shirt? W: It was 80 yuan, but now it is half price.",q:'What is the price now?',opts:['80 yuan','40 yuan','160 yuan','20 yuan'],ans:1,exp:'半价 → 40 元。'},
- {id:'b29',type:'听力',script:"W: I am going to the library to return these books. M: Can you borrow a novel for me?",q:'What will the woman do?',opts:['Return books','Borrow a novel','Buy a book','Read a newspaper'],ans:0,exp:'女士要去图书馆还书。'},
- {id:'b30',type:'听力',script:"M: The weather report says it will rain tomorrow. W: Then we have to cancel the picnic.",q:'What will happen to the picnic?',opts:['It will be held as planned','It will be cancelled','It will move indoors','It will start earlier'],ans:1,exp:'因为下雨，野餐要取消。'}
-];
-var BANK_MAP={};BANK.forEach(function(x){BANK_MAP[x.id]=x;});
-var bankSession=null;
-function viewBank(){
-  if(bankSession)return bankSessionHtml();
-  var b=state.settings.bank||{attempts:0,correct:0,byType:{},done:{}};
-  var doneN=Object.keys(b.done||{}).length;
-  var rate=b.attempts?Math.round(b.correct/b.attempts*100):0;
-  return ''
-   +'<div class="card"><div class="section-head"><h4>四六级真题 · 仿真题库</h4></div>'
-   +'<p class="muted">题库练习型：阅读 / 完形 / 词汇 / 听力 选择题，选完自动判分，答错自动进错本（走复习曲线）。听力由浏览器朗读自写脚本，无需音频文件。</p></div>'
-   +'<div class="card"><div class="stat-grid">'
-   +'<div class="cell"><b>'+doneN+'</b><span>已练题</span></div>'
-   +'<div class="cell"><b>'+(BANK.length-doneN)+'</b><span>未练题</span></div>'
-   +'<div class="cell"><b>'+(b.attempts||0)+'</b><span>总作答</span></div>'
-   +'<div class="cell"><b style="color:'+(rate>=60?'var(--green)':'var(--red)')+'">'+rate+'%</b><span>正确率</span></div>'
-   +'</div>'
-   +'<div class="muted" style="margin-top:10px">阅读 '+(byTypeRate(b,'阅读'))+' · 完形 '+(byTypeRate(b,'完形'))+' · 词汇 '+(byTypeRate(b,'词汇'))+' · 听力 '+(byTypeRate(b,'听力'))+'</div></div>'
-   +'<div class="card"><div class="row" style="gap:10px">'
-   +'<button class="btn grow" onclick="startBank()">'+icon('zap',16)+' 开始练习（10题）</button>'
-   +'<button class="btn gray" onclick="resetBank()">重置统计</button></div>'
-   +'<button class="btn line block" style="margin-top:10px" onclick="switchTab(\'book\')">查看错本</button></div>'
-   +'<div class="card-soft"><b style="color:var(--ink-2)">说明</b><p class="muted" style="margin-top:6px">题为按四级真题题型与难度编写的模拟题（非官方原题，规避版权）。想要更多题、换题型，或想接你自己的官方音频，告诉我即可扩充。</p></div>';
-}
-function byTypeRate(b,t){
-  var o=b.byType&&b.byType[t];if(!o||!o.a)return '—';
-  return o.c+'/'+o.a+' ('+Math.round(o.c/o.a*100)+'%)';
-}
-function bankSessionHtml(){
-  if(bankSession.idx>=bankSession.list.length)return bankSummaryHtml();
-  return bankQHtml();
-}
-/* playScript 已移除，改用 AP 听力播放器 */
-function bankQHtml(){
-  var id=bankSession.list[bankSession.idx];
-  var it=BANK_MAP[id];
-  var total=bankSession.list.length;
-  var playerHtml=it.script?('<div class="bank-player"><button class="btn grow" id="apBtn" onclick="playBankScript(\''+it.id+'\')">'+icon('play',16)+' 播放听力</button></div>'):'';
 
-  var optsHtml=it.opts.map(function(o,i){
-    var cls='opt',dis='';
-    if(bankSession.graded){dis='disabled';if(i===it.ans)cls+=' ok';if(i===bankSession.sel&&i!==it.ans)cls+=' no';}
-    else if(bankSession.sel===i)cls+=' sel';
-    return '<button class="'+cls+'" '+dis+' onclick="bankSelect('+i+')">'+String.fromCharCode(65+i)+'. '+esc(o)+'</button>';
-  }).join('');
-  var fb='';
-  if(bankSession.graded){
-    var ok=bankSession.sel===it.ans;
-    fb='<div class="bank-fb '+(ok?'ok':'no')+'"><b>'+(ok?'回答正确':'回答错误')+'</b>　正确答案：'+String.fromCharCode(65+it.ans)+'. '+esc(it.opts[it.ans])+'<br><span class="muted">解析：'+esc(it.exp)+'</span></div>';
-    if(it.script)fb+='<div class="muted" style="margin-top:8px">听力原文：'+esc(it.script)+'</div>';
-  }
-  var foot=bankSession.graded
-    ? '<button class="btn grow" onclick="bankNext()">'+(bankSession.idx>=total-1?'查看结果':'下一题')+'</button>'
-    : '<button class="btn grow" '+((bankSession.sel==null)?'disabled':'')+' onclick="bankGrade()">提交</button>';
-  return '<div class="card"><div class="row" style="margin-bottom:10px"><span class="badge orange">'+it.type+'</span><span class="grow muted" style="text-align:right">第 '+(bankSession.idx+1)+' / '+total+' 题</span></div>'
-   +playerHtml
-   +'<div class="q-stem">'+esc(it.q)+'</div>'
-   +'<div class="opt-list">'+optsHtml+'</div>'+fb+foot+'</div>';
-}
-function bankSummaryHtml(){
-  var r=bankSession.results,n=r.length,c=0;for(var i=0;i<r.length;i++)if(r[i])c++;
-  return '<div class="card" style="text-align:center"><h3 style="justify-content:center">本轮练习完成</h3>'
-   +'<div class="cd-num" style="margin:10px 0">'+c+'<span>/ '+n+' 正确</span></div>'
-   +'<div class="muted">正确率 '+Math.round(c/n*100)+'%</div>'
-   +'<div class="row" style="margin-top:14px;gap:10px">'
-   +'<button class="btn gray grow" onclick="switchTab(\'book\')">去错本复习</button>'
-   +'<button class="btn grow" onclick="startBank()">再来一组</button></div></div>';
-}
-function startBank(){
-  stopSpeak();
-  var ids=BANK.map(function(x){return x.id;});
-  for(var i=ids.length-1;i>0;i--){var j=Math.floor(Math.random()*(i+1));var t=ids[i];ids[i]=ids[j];ids[j]=t;}
-  bankSession={list:ids.slice(0,Math.min(10,ids.length)),idx:0,sel:null,graded:false,results:[]};
-  refreshAll();
-}
-function bankSelect(i){if(bankSession.graded)return;bankSession.sel=i;refreshAll();}
-function bankGrade(){
-  if(bankSession===null||bankSession.graded||bankSession.sel==null)return;
-  var it=BANK_MAP[bankSession.list[bankSession.idx]];
-  var ok=bankSession.sel===it.ans;
-  bankSession.results.push(ok);bankSession.graded=true;
-  var b=state.settings.bank;if(!b.byType)b.byType={};if(!b.byType[it.type])b.byType[it.type]={a:0,c:0};
-  b.byType[it.type].a++;if(ok)b.byType[it.type].c++;
-  b.attempts++;if(ok)b.correct++;if(!b.done)b.done={};b.done[it.id]=1;
-  var td=todayStr();state.dayStats[td]=(state.dayStats[td]||0)+1;
-  save();syncMark('settings');
-  maybeAutoCheckin();
-  if(!ok){
-    var id=uid();
-    state.errors.push({id:id,date:todayStr(),type:it.type,reason:'题库答错',question:it.q,idea:'正确答案：'+it.opts[it.ans]+'。'+it.exp,stage:0,next:addDays(todayStr(),ERR_INTERVALS[0]),_t:Date.now()});
-    save();syncMark('error:'+id);toast('答错，已记入错本');
-  }else{toast('回答正确');}
-  refreshAll();
-}
-function bankNext(){
-  if(bankSession===null)return;
-  stopSpeak();
-  if(bankSession.idx>=bankSession.list.length-1){bankSession.idx=bankSession.list.length;refreshAll();return;}
-  bankSession.idx++;bankSession.sel=null;bankSession.graded=false;refreshAll();
-}
-function resetBank(){
-  if(!confirm('确定清空真题练习统计？已记入错本的题不会删除。'))return;
-  state.settings.bank={attempts:0,correct:0,byType:{},done:{}};save();syncMark('settings');refreshAll();
-}
 
 /* ================================================================
    初始化（固定顺序：载入数据 → 初始化状态 → 统一渲染 → 连接云端）
    ================================================================ */
 document.addEventListener('DOMContentLoaded',function(){
   SYNC_IDX=state.sync||{};
-  ensureQueue(todayStr());
   renderSyncPill();
   refreshAll();
   if(ONLINE)dbInit();else{SYNC_MODE='off';renderSyncPill();}
