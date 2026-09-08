@@ -786,7 +786,8 @@ var ICONS={
   zap:'<path d="M13 2L4 14h6l-1 8 9-12h-6z"/>',
   star:'<path d="M12 3l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 18l-5.9 3 1.2-6.5L2.5 9.9 9.1 9z"/>',
   edit:'<path d="M4 20h4l10-10-4-4L4 16z"/><path d="M14 6l4 4"/>',
-  cloud:'<path d="M7 18a4 4 0 0 1 .4-8 5.5 5.5 0 0 1 10.4 1.5A3.5 3.5 0 0 1 18 18z"/>'
+  cloud:'<path d="M7 18a4 4 0 0 1 .4-8 5.5 5.5 0 0 1 10.4 1.5A3.5 3.5 0 0 1 18 18z"/>',
+  translate:'<path d="M4 8h13l-3-3M20 16H7l3 3"/><path d="M9 4v12M15 20V8"/>'
 };
 
 /* ---------------- 工具 ---------------- */
@@ -809,30 +810,45 @@ function toast(msg){
   el.textContent=msg;el.classList.add('show');
   clearTimeout(TOAST_T);TOAST_T=setTimeout(function(){el.classList.remove('show');},2200);
 }
+function _ttsVoices(){try{return window.speechSynthesis?window.speechSynthesis.getVoices()||[]:[];}catch(e){return [];}}
+function _ttsPickVoice(lang){
+  var vs=_ttsVoices();if(!vs.length)return null;
+  lang=(lang||'en-US').toLowerCase();
+  var a=vs.filter(function(v){return (v.lang||'').toLowerCase().indexOf(lang)===0;});
+  if(a.length)return a[0];
+  a=vs.filter(function(v){return (v.lang||'').toLowerCase().indexOf('en')===0;});
+  return a.length?a[0]:vs[0];
+}
 function speak(text,lang){
   try{
-    if(!('speechSynthesis' in window)||!window.SpeechSynthesisUtterance)return;
+    if(!('speechSynthesis' in window)||!window.SpeechSynthesisUtterance){toast('当前浏览器无语音朗读功能');return;}
     var s=window.speechSynthesis;
     s.cancel();
     var u=new SpeechSynthesisUtterance(text);u.lang=lang||'en-US';u.rate=.9;
-    setTimeout(function(){try{if(s.resume)s.resume();s.speak(u);}catch(e){}},90);
+    var v=_ttsPickVoice(u.lang);if(v)u.voice=v;
+    if(!v&&/^en/i.test(u.lang))toast('未找到英文语音，请检查系统语音包');
+    setTimeout(function(){try{if(s.resume)s.resume();s.speak(u);}catch(e){toast('朗读失败');}},90);
   }catch(e){}
 }
 function canSpeak(){return ('speechSynthesis' in window)&&!!window.SpeechSynthesisUtterance;}
-/* 听力播放（基于浏览器 TTS，点击即放，无语速/音量控件） */
+/* 听力播放（基于浏览器 TTS，点击即放，无语速/音量控件）。
+   注：本站为单文件离线页，不托管录音文件，故用浏览器 TTS 朗读原文模拟听力；
+   若系统未装英文语音包则无声，可改看原文跟读。 */
 var PS={playing:false,key:null};
 function stopSpeak(){try{window.speechSynthesis.cancel();}catch(e){}PS.playing=false;PS.key=null;renderPlayBtn();}
 function playScript(text,key){
   try{
-    if(!('speechSynthesis' in window)||!window.SpeechSynthesisUtterance||!text)return;
+    if(!('speechSynthesis' in window)||!window.SpeechSynthesisUtterance||!text){toast('当前浏览器无语音朗读功能');return;}
     var s=window.speechSynthesis;
     if(PS.playing&&PS.key===key){s.cancel();PS.playing=false;PS.key=null;renderPlayBtn();return;}
     s.cancel();
     var u=new SpeechSynthesisUtterance(text);u.lang='en-US';u.rate=0.95;u.volume=1;
+    var v=_ttsPickVoice('en-US');if(v)u.voice=v;
+    if(!v)toast('未找到英文语音，请检查系统语音包（或看原文跟读）');
     u.onend=function(){PS.playing=false;PS.key=null;renderPlayBtn();};
     u.onerror=function(){PS.playing=false;PS.key=null;renderPlayBtn();};
     PS.playing=true;PS.key=key;renderPlayBtn();
-    setTimeout(function(){try{if(s.resume)s.resume();s.speak(u);}catch(e){}},90);
+    setTimeout(function(){try{if(s.resume)s.resume();s.speak(u);}catch(e){toast('播放失败');}},120);
   }catch(e){}
 }
 function playBankScript(id){var it=BANK_MAP[id];if(it&&it.script)playScript(it.script,id);}
@@ -840,6 +856,8 @@ function renderPlayBtn(){
   var b=document.getElementById('apBtn');
   if(b)b.innerHTML=(PS.playing?icon('pause',16):icon('play',16))+' '+(PS.playing?'暂停':'播放听力');
 }
+/* 预热语音列表：部分浏览器首次 speak 前需先触发加载，否则首点击静默 */
+if('speechSynthesis' in window){try{window.speechSynthesis.getVoices();window.speechSynthesis.onvoiceschanged=function(){_ttsVoices();};}catch(e){}}
 
 /* ---------------- 示例数据 ---------------- */
 function defaultExamDate(){
@@ -2053,26 +2071,37 @@ function togglePlan(key){
   refreshAll();
 }
 /* ---------------- 视图：写译 ---------------- */
-/* 写作真题题库：全部为历年四级作文真题 Directions（原文），严禁自编 */
+/* 写作真题题库：全部为历年四级作文真题 Directions（原文），严禁自编；model 为配套参考范文 */
 var WRITE_PROMPTS=[
   {id:'w201712',exam:'2017年12月（卷一）',title:'How to best handle the relationship between parents and children',
-   dir:'Directions: For this part, you are allowed 30 minutes to write a short essay on how to best handle the relationship between parents and children. You should write at least 120 words but no more than 180 words.'},
+   dir:'Directions: For this part, you are allowed 30 minutes to write a short essay on how to best handle the relationship between parents and children. You should write at least 120 words but no more than 180 words.',
+   model:"Nowadays the relationship between parents and children has become a common concern. In my view, the key to handling it well lies in mutual understanding and communication. To begin with, children should spend more time talking with their parents, sharing their thoughts instead of hiding them. Parents, on the other hand, ought to respect their children's privacy and offer advice rather than orders. Moreover, both sides need to be tolerant: parents should trust their children, while children should appreciate their parents' devotion. Only through frequent and sincere communication can a warm and harmonious family relationship be built. After all, family is the harbor where we always belong.'"},
   {id:'w201706',exam:'2017年6月（卷一）',title:'A Second-hand Bicycle for Sale',
-   dir:'Directions: For this part, you are allowed 30 minutes to write an advertisement on your campus website to sell a bicycle you used at college. Your advertisement may include its brand, specifications/features, condition and price, and your contact information. You should write at least 120 words but no more than 180 words.'},
+   dir:'Directions: For this part, you are allowed 30 minutes to write an advertisement on your campus website to sell a bicycle you used at college. Your advertisement may include its brand, specifications/features, condition and price, and your contact information. You should write at least 120 words but no more than 180 words.',
+   model:"I am a senior student who is about to graduate and want to sell my beloved bicycle at a low price. It is a blue Phoenix mountain bike bought only last year, still in excellent condition. The bike is foldable, with 7 speeds and strong frames, which makes it safe and convenient for campus travel. Though second-hand, it looks almost as good as new because I have taken good care of it. Considering its quality, I am selling it for just 200 yuan, a real bargain. If you are interested, please call me at 12345678 or email me at liming@163.com. Do not miss this chance!'"},
   {id:'w201312',exam:'2013年12月（卷一）',title:'My View on the “Campus Star” Contest',
-   dir:'Directions: For this part, you are allowed 30 minutes to write a short essay entitled My View on the “Campus Star” Contest. You should write 120 words following the outline given below: 1. 校园里也涌现出了各种选“星”比赛 2. 这种现象带来的问题 3. 你的看法'},
+   dir:'Directions: For this part, you are allowed 30 minutes to write a short essay entitled My View on the “Campus Star” Contest. You should write 120 words following the outline given below: 1. 校园里也涌现出了各种选“星”比赛 2. 这种现象带来的问题 3. 你的看法',
+   model:"In recent years, various 'Campus Star' contests have sprung up in many schools. While these activities make campus life more colorful, they also bring problems. Some students become so eager to become a star that they neglect their studies, pouring time and energy into rehearsals. Worse still, vanity may grow among participants. In my opinion, such contests are acceptable only if kept in balance. They should serve as a stage to show talent, not an excuse to abandon academic work. Students must remember that study remains their primary task, and extracurricular activities ought to help, not hinder, their growth.'"},
   {id:'w200501',exam:'2005年1月（A卷）',title:'A Campaign Speech',
-   dir:'Directions: For this part, you are allowed 30 minutes to write a Campaign Speech. You should write at least 120 words and base your composition on the outline given in Chinese below: 1. 你认为自己具备了什么条件（能力、性格、爱好等）可以胜任学生会主席的工作 2. 如果当选，你将为本校同学做些什么'},
+   dir:'Directions: For this part, you are allowed 30 minutes to write a Campaign Speech. You should write at least 120 words and base your composition on the outline given in Chinese below: 1. 你认为自己具备了什么条件（能力、性格、爱好等）可以胜任学生会主席的工作 2. 如果当选，你将为本校同学做些什么',
+   model:"Good morning, everyone. I am Li Hua from the Chemistry Department, running for president of the Student Union. I believe I am qualified because I am outgoing, responsible, and good at communication and organization. As class monitor for three years, I have learned to serve others wholeheartedly. If elected, I will organize more practical activities, such as lectures and sports events, to enrich your campus life. I will also build a better bridge between students and the school. I sincerely hope you will trust me with your vote. Together we can make our school a warmer place. Thank you!'"},
   {id:'w200406',exam:'2004年6月（A卷）',title:'A Brief Introduction to a Tourist Attraction',
-   dir:'Directions: For this part, you are allowed 30 minutes to write a composition entitled A Brief Introduction to a Tourist Attraction. You should write at least 120 words according to the following guidelines: Your role: a tour guide; Your audience: a group of foreign tourists; Your introduction should include: some welcoming words, the schedule for the day, a description of the place the tourists will be visiting (e.g. a scenic spot or a historical site, etc.). You should make the introduction interesting and the arrangements for the day clear to everybody.'},
+   dir:'Directions: For this part, you are allowed 30 minutes to write a composition entitled A Brief Introduction to a Tourist Attraction. You should write at least 120 words according to the following guidelines: Your role: a tour guide; Your audience: a group of foreign tourists; Your introduction should include: some welcoming words, the schedule for the day, a description of the place the tourists will be visiting (e.g. a scenic spot or a historical site, etc.). You should make the introduction interesting and the arrangements for the day clear to everybody.',
+   model:"Good morning, ladies and gentlemen, and welcome to Beijing. I am your tour guide from China Travel Service, and it is my great honor to spend the whole day with you. Today's schedule is as follows: we will first visit the Great Wall, then the Ming Tombs, and in the afternoon the Summer Palace. The Great Wall, dating back to the 7th century B.C., is the grandest fortification in ancient China and one of the world's wonders. From its top you can enjoy magnificent mountains and forests. I wish you all a pleasant and memorable trip!'"},
   {id:'w200312',exam:'2003年12月',title:'A Letter in Reply to a Friend',
-   dir:'Directions: For this part, you are allowed 30 minutes to write a letter in reply to a friend’s inquiry about applying for admission to your college or university. You should write at least 120 words according to the outline given below in Chinese: 1. 建议报考的专业及理由 2. 报考该专业的基本条件 3. 应当如何备考'}
+   dir:'Directions: For this part, you are allowed 30 minutes to write a letter in reply to a friend’s inquiry about applying for admission to your college or university. You should write at least 120 words according to the outline given below in Chinese: 1. 建议报考的专业及理由 2. 报考该专业的基本条件 3. 应当如何备考',
+   model:"Dear Tom,\nI am glad to hear that you plan to apply for admission to my university. As for the major, I suggest English, because it is the most widely used language and opens doors to many careers. To be admitted, you need a solid foundation in reading, listening and speaking, plus an intense interest in learning. As preparation, first review the required vocabulary, then spend time on reading and writing every day. Only by consistent effort can you hope to enroll here. I look forward to studying with you soon.\nYours,\nLi Ming"}
 ];
 function viewWrite(){
   var tp=WRITE_PROMPTS.map(function(p){
     return '<div class="wl-prompt"><div class="grow"><div class="row" style="gap:7px;align-items:center;flex-wrap:wrap"><span class="badge orange">'+esc(p.exam)+'</span><b>'+esc(p.title)+'</b></div>'+
-      '<div class="muted" style="border-left:3px solid var(--line-soft);padding-left:8px;margin-top:4px;white-space:pre-wrap">'+esc(p.dir)+'</div></div>'+
-      '<button class="btn sm line" onclick="fillWrite(\''+esc(p.exam+' · '+p.title)+'\')">去写</button></div>';
+      '<div class="muted" style="border-left:3px solid var(--line-soft);padding-left:8px;margin-top:4px;white-space:pre-wrap">'+esc(p.dir)+'</div>'+
+      (p.model?'<div id="model-'+p.id+'" style="display:none;margin-top:8px;padding:10px 12px;background:#FBF7F1;border-radius:10px;font-size:13px;color:var(--ink-2);line-height:1.7;white-space:pre-wrap">'+esc(p.model)+'</div>':'')+
+      '</div>'+
+      '<div style="display:flex;flex-direction:column;gap:6px">'+
+        (p.model?'<button class="btn sm line" onclick="toggleModel(\''+p.id+'\')">看范文</button>':'')+
+        '<button class="btn sm line" onclick="fillWrite(\''+esc(p.exam+' · '+p.title)+'\')">去写</button>'+
+      '</div></div>';
   }).join('');
   var list=(state.writing||[]).slice().sort(function(a,b){return a.date<b.date?1:-1;}).slice(0,30);
   var html=list.length?list.map(function(w){
@@ -2096,6 +2125,7 @@ function viewWrite(){
     '<h3>'+icon('target',16)+'写作真题题库<span class="sub">历年四级作文 Directions（原文）</span></h3>'+tp+
     '<div class="muted" style="margin-top:8px">选一题点「去写」填到下方，写完粘进内容框、保存并标「已批改」，丢我逐句批改（重点扣：缩写 / 时态 / 缺从句 / 无观点）。</div>'+
   '</div>'+
+  renderTransPractice()+
   '<div class="card">'+
     '<h3>'+icon('plus',16)+'记一篇写译</h3>'+
     '<div class="form-grid"><div class="field"><label for="wType">类型</label><select id="wType"><option>写作</option><option>翻译</option></select></div>'+
@@ -2108,6 +2138,41 @@ function viewWrite(){
   '</div>';
 }
 function fillWrite(topic){var el=$('#wTopic');if(el){el.value=topic;el.scrollIntoView({block:'center'});}var ta=$('#wText');if(ta)ta.focus();}
+function toggleModel(id){var el=document.getElementById('model-'+id);if(el)el.style.display=el.style.display==='none'?'block':'none';}
+/* 翻译真题题库：历年四级段落汉译英真题原文 + 参考译文（严禁自编） */
+var TRANS_PRACTICE=[
+  {id:'t201606',exam:'2016年6月',title:'功夫（Kung Fu）',
+   src:'功夫(Kung Fu)是中国武术(martial arts)的俗称。中国武术的起源可以追溯到自卫的需要、狩猎活动以及古代中国的军事训练。它是中国传统体育运动的一种。年轻人和老年人都练。它已逐渐演变成了中国文化的独特元素。作为中国的国宝，功夫有上百种不同的风格，是世界上练得最多的武术形式。有些风格模仿了动物的动作，还有一些则受到了中国哲学思想、神话和传说的启发。',
+   ref:'Kung Fu is commonly known as the Chinese martial arts, the origin of which can be traced back to the need of self-defense, hunting activities and military training in ancient China. It is one kind of Chinese traditional sports. The young and the old often practice it. It has gradually evolved into the unique elements of Chinese culture. As a national treasure of China, there are hundreds of different styles for Kung Fu, which is most common forms of martial arts. Some of styles imitate the movement of the animals, and some are inspired by Chinese philosophy, myths and legends.'},
+  {id:'t201712',exam:'2017年6月',title:'黄河（the Yellow River）',
+   src:'黄河是亚洲第三、世界第六长的河流。“黄”这个字描述的是其河水浑浊的颜色。黄河发源于青海，流经九个省份，最后注入渤海。黄河是中国赖以生存的几条河流之一。黄河流域(river basin)是中国古代文明的诞生地，也是中国早期历史上最繁荣的地区。然而，由于极具破坏力的洪水频发，黄河曾造成多次灾害。在过去几十年里，政府采取了各种措施防止灾害发生。',
+   ref:'The Yellow River ranks the third longest in Asia and the sixth longest in the world. The word “yellow” describes the muddy water of the river. The Yellow River, one of several rivers for China to live on, originates from Qinghai, flows through nine provinces, and finally pours into the Bohai Sea. The river basin is not only the birthplace of ancient Chinese civilization, but also the most prosperous region in the early history of China. However, due to the frequent devastating floods, it has caused many disasters. In the past few decades, the government has taken various measures to prevent disasters.'},
+  {id:'t201512',exam:'2015年12月',title:'丽江古镇（Lijiang）',
+   src:'云南省的丽江古镇是中国著名的旅游目的地之一。那里的生活节奏比大多数中国的城市都要缓慢。丽江到处都是美丽的自然风光，众多的少数民族同胞提供了各式各样、丰富多彩的文化让游客体验。历史上，丽江还以“爱之城”而闻名。当地人中流传着许多关于因爱而生、为爱而死的故事。如今，在中外游客眼中，这个古镇被视为爱情和浪漫的天堂(paradise)。',
+   ref:'Lijiang, an ancient town in Yunnan Province, is one of the most famous tourist attractions in China. The life tempo there is slower than that of most Chinese cities. There is beautiful natural scenery everywhere in Lijiang, and many minorities provide tourists with diverse and colorful cultural experience. It has also been renowned as the “City of Love” in history. Numerous legends about people who were born and died for love have been handed down among the local folk. Nowadays, this ancient town is regarded as the paradise of love and romance in the eyes of both Chinese and foreign visitors.'},
+  {id:'t201606b',exam:'2016年6月',title:'乌镇（Wuzhen）',
+   src:'乌镇是浙江的一座古老水镇，坐落在京杭大运河畔。这是一处迷人的地方，有许多古桥、中式旅店和餐馆。在过去的一千年里，乌镇的水系和生活方式并未经历多少变化，是一座展现古文明的博物馆。乌镇所有房屋都用石木建造。数百年来，当地人沿着河边建起了住宅和集市。无数宽敞美丽的庭院藏身于屋舍之间，游客们每到一处都会有惊喜的发现。',
+   ref:'Wuzhen is an ancient water town in Zhejiang province, which is located in the Grand Canal of Beijing and Hangzhou. This is a charming place, having many ancient bridges, Chinese style hotels and restaurants. Over the past one thousand years, the water system and lifestyle of Wuzhen has not experienced many changes, which is a museum showing ancient civilizations. All the houses in Wuzhen are built of stone and wood. For hundreds of years, the local people built homes and fairs along the river. Countless beautiful and spacious courtyards lie among the houses, thus the tourists would have a pleasant surprise when coming to here.'}
+];
+function renderTransPractice(){
+  var items=TRANS_PRACTICE.map(function(it){
+    return '<div style="padding:12px 0;border-top:1px solid #eee">'+
+      '<div class="row" style="gap:7px;align-items:center;flex-wrap:wrap"><span class="badge blue">'+esc(it.exam)+'</span><b>'+esc(it.title)+'</b></div>'+
+      '<div class="muted" style="margin-top:6px;line-height:1.7;white-space:pre-wrap">'+esc(it.src)+'</div>'+
+      '<div id="tref-'+it.id+'" style="display:none;margin-top:8px;padding:10px 12px;background:#FBF7F1;border-radius:10px;font-size:13px;color:var(--ink-2);line-height:1.7;white-space:pre-wrap">'+esc(it.ref)+'</div>'+
+      '<div class="row" style="gap:8px;margin-top:8px">'+
+        '<button class="btn sm line" onclick="toggleTrans(\''+it.id+'\')">看参考译文</button>'+
+        (canSpeak()?'<button class="speak" onclick="speak(\''+esc(it.src)+'\',\'zh-CN\')" aria-label="朗读原文">'+icon('vol',16)+'</button>':'')+
+      '</div>'+
+    '</div>';
+  }).join('');
+  return '<div class="card">'+
+    '<h3>'+icon('translate',16)+'翻译真题题库<span class="sub">历年四级段落汉译英（原文）</span></h3>'+
+    '<div class="muted" style="margin-bottom:6px">以下为真实四级翻译真题中文段落：先自己译，再点「看参考译文」对照；可点喇叭朗读原文跟练。</div>'+
+    items+
+  '</div>';
+}
+function toggleTrans(id){var el=document.getElementById('tref-'+id);if(el)el.style.display=el.style.display==='none'?'block':'none';}
 function addWriting(){
   var type=$('#wType')?$('#wType').value:'写作';
   var topic=$('#wTopic')?($('#wTopic').value||'').trim():'';
